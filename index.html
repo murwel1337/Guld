@@ -929,6 +929,7 @@ button.stat:hover { background: var(--slab-3); }
       <div class="v-head"><h2 class="h2" id="vname">Nybygget</h2><span class="coord" id="vcoord"></span><button class="icon-btn sm rename-btn" type="button" data-act="rename" aria-label="Byt namn på byn" title="Byt namn på byn"><svg><use href="#i-edit"/></svg></button></div>
       <p class="hint vnote" id="vnote" hidden></p>
       <div class="ship" id="shipWrap" hidden></div>
+      <div class="ship" id="moveWrap" hidden></div>
       <div class="ledger" id="ledger"></div>
     </div>
   </section>
@@ -1350,6 +1351,7 @@ const Engine = (function () {
       tq: [], queue: 0, trainProgress: 0, batch: 0,
       unlocked: { berserker: false, shield: false, scout: false }, labbing: null,
       research: { attack: 0, defense: 0 }, unitUp: { soldier: 0, berserker: 0, shield: 0 }, researching: null,
+      settlers: 0,                     // utvandrare som byn har tränat (högst en per by)
       starve: 0, founded: s.time,
     };
   }
@@ -1414,7 +1416,7 @@ const Engine = (function () {
     const nRivals = humans ? 0 : rival ? (opts.rivalCount != null ? opts.rivalCount : cfg.rivalCount) : 0;
     const N = cfg.mapSize;
     const s = {
-      v: 10, cfg, seed, rng: seed, time: 0, nextSpawnAt: MINUTE,
+      v: 11, cfg, seed, rng: seed, time: 0, nextSpawnAt: MINUTE,
       tiles: [], towns: {}, players: {}, order: [], armies: [], caravans: [], log: [],
       nextId: 1, winner: null, endedAt: null, online: !!humans,
     };
@@ -1803,9 +1805,11 @@ const Engine = (function () {
         if (!(n >= 1)) return fail('Välj minst en.');
         if (tw.buildings.barracks < 1) return fail('Bygg en kasern först.');
         if (!canTrain(tw, k)) return fail(k === 'settler' ? 'Kräver forskningscenter nivå ' + cfg.units.settler.lab + '.' : 'Den trupptypen är inte upplåst i den här byn.');
+        if (k === 'settler' && (tw.settlers || 0) + n > 1) return fail('Varje by kan bara träna en utvandrare.');
         const cost = n * cfg.units[k].cost;
         if (tw.gold < cost) return fail('Inte tillräckligt med guld.');
         tw.gold -= cost;
+        if (k === 'settler') tw.settlers = (tw.settlers || 0) + n;
         const last = tw.tq[tw.tq.length - 1];
         if (last && last.k === k) last.n += n; else tw.tq.push({ k, n });
         tw.queue += n;
@@ -2437,7 +2441,7 @@ const Engine = (function () {
     const foodNet = foodProdPerHour(s, tw) - upkeepPerHour(s, tw) - tw.queue;
     const queued = U(); tw.tq.forEach(b => { queued[b.k] += b.n; });
     const all = addTo(U(tUnits), queued);
-    const wantSettler = tw.start && tw.buildings.lab >= cfg.units.settler.lab && p.towns.length < prof.maxTowns && min >= prof.expandFrom
+    const wantSettler = tw.start && !(tw.settlers >= 1) && tw.buildings.lab >= cfg.units.settler.lab && p.towns.length < prof.maxTowns && min >= prof.expandFrom
       && all.settler === 0 && !s.armies.some(a => a.owner === p.id && a.settler);
     const train = () => {
       if (B.barracks === 0) return;
@@ -2661,6 +2665,18 @@ const Engine = (function () {
       s.cfg.workshopSpeedFactor = CONFIG.workshopSpeedFactor;
       for (const k in s.towns) if (!s.towns[k].unitUp) s.towns[k].unitUp = { soldier: 0, berserker: 0, shield: 0 };
       s.v = 10;
+      return migrate(s);
+    }
+    if (s.v === 10) {
+      // 10 → 11: varje by kan bara träna en utvandrare. Byar som redan har en (hemma, i kö eller på väg) räknas.
+      for (const k in s.towns) {
+        const tw = s.towns[k];
+        if (tw.settlers != null) continue;
+        const queued = tw.tq.some(b => b.k === 'settler');
+        const away = s.armies.some(a => a.owner === tw.owner && a.home === tw.idx && a.settler);
+        tw.settlers = (tw.hu.settler > 0 || queued || away) ? 1 : 0;
+      }
+      s.v = 11;
       return s;
     }
     if (s.v !== 6) return s;
@@ -2675,7 +2691,7 @@ const Engine = (function () {
     return migrate(s);
   }
   function isValidSave(s) {
-    return !!(s && s.v >= 6 && s.v <= 10 && s.cfg && Array.isArray(s.tiles) && s.towns && s.players && s.order && s.tiles.length === s.cfg.mapSize * s.cfg.mapSize);
+    return !!(s && s.v >= 6 && s.v <= 11 && s.cfg && Array.isArray(s.tiles) && s.towns && s.players && s.order && s.tiles.length === s.cfg.mapSize * s.cfg.mapSize);
   }
 
   // =====================================================================
@@ -2730,7 +2746,7 @@ const Engine = (function () {
   }
   function decodeView(init, v, prevLog) {
     const cfg = init.cfg, N = cfg.mapSize;
-    const s = { v: 10, cfg, seed: init.seed, rng: 0, time: v.t, nextSpawnAt: v.ns, tiles: [], towns: {}, players: {}, order: v.ord.slice(),
+    const s = { v: 11, cfg, seed: init.seed, rng: 0, time: v.t, nextSpawnAt: v.ns, tiles: [], towns: {}, players: {}, order: v.ord.slice(),
       armies: v.ar, caravans: v.cv, log: [], nextId: v.nid, winner: v.w, endedAt: v.e, online: true, view: true };
     for (let i = 0; i < N * N; i++) s.tiles.push({ x: i % N, y: Math.floor(i / N), type: CODE_TYPE[v.ty[i]], owner: null, u: U(), troops: 0, g: {}, look: init.look[i] });
     for (const r of v.tl) {
@@ -2883,7 +2899,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   let lastReal = performance.now(), lastUi = 0, lastSave = 0;
   let toastSeen = 0, reportSeen = 0;
   // town = byn som visas under Byn och i HUD:en, sendFrom = byn trupperna skickas från i rutpanelen.
-  const ui = { tab: 'village', side: 'village', sel: -1, sendU: null, trainN: Math.max(1, Math.floor(store.get(TRAIN_KEY) || 1)), trainK: 'soldier', rowSig: '', sheetSig: '', troopsSig: '', reportsSig: '', desk: false, chosenSpeed: 1, chosenRival: 'normal', confirmRecall: false, town: -1, sendFrom: -1, townSigs: {}, fwd: null, fwdSig: '', standSig: '' };
+  const ui = { tab: 'village', side: 'village', sel: -1, sendU: null, trainN: Math.max(1, Math.floor(store.get(TRAIN_KEY) || 1)), trainKs: {}, move: { to: -1, u: null }, moveOpen: false, rowSig: '', sheetSig: '', troopsSig: '', reportsSig: '', desk: false, chosenSpeed: 1, chosenRival: 'normal', confirmRecall: false, town: -1, sendFrom: -1, townSigs: {}, fwd: null, fwdSig: '', standSig: '' };
   let incomingSeen = new Set();
   ui.stay = store.get(STAY_KEY) === true;
   const me = () => S.players[ME];
@@ -3555,6 +3571,12 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     });
   }
   // Kasernens träning visas under Trupper, för den valda byn.
+  // Varje by minns vilken trupptyp den tränade senast.
+  function curTrainK(tw) {
+    let k = ui.trainKs[tw.idx] || 'soldier';
+    if (!E.canTrain(tw, k) || (k === 'settler' && (tw.settlers || 0) >= 1)) k = 'soldier';
+    return k;
+  }
   function setTrainN(v) { ui.trainN = clamp(Math.floor(v) || 1, 1, 9999); store.set(TRAIN_KEY, ui.trainN); }
   function buildTrain() {
     $('trainSlot').innerHTML = trainHTML();
@@ -3639,6 +3661,64 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     $('shipBtn').disabled = n < 1;
     setText($('shipBtn'), n < 1 ? 'Välj guld eller mat' : 'Skicka ' + resTxt(ui.ship.gold, ui.ship.food));
   }
+  // Flytta trupper från den valda byn till en annan av dina byar.
+  function buildMove() {
+    $('moveWrap').innerHTML =
+      '<button class="btn wide ship-toggle" type="button" data-act="move-toggle" id="moveToggle">' + icon('t-troops', 'ic') + '<span>Flytta trupper till en annan by</span></button>' +
+      '<div class="train" id="moveBox" hidden>' +
+        '<div class="from-row"><label for="moveTo">Till</label><select class="select" id="moveTo"></select></div>' +
+        '<div class="urows" id="moveRows"></div>' +
+        '<div class="send-row"><button class="chip" type="button" data-act="mv-every" id="mvEvery">Alla trupper <b></b></button><button class="chip" type="button" data-act="mv-clear">Rensa</button></div>' +
+        '<p class="info" id="moveInfo"></p>' +
+        '<div class="row"><button class="btn" type="button" data-act="move-toggle">Stäng</button><button class="btn primary" type="button" data-act="move-send" id="moveBtn">Flytta</button></div>' +
+      '</div>';
+    $('moveTo').addEventListener('change', e => { ui.move.to = +e.target.value; updateMove(TW()); });
+  }
+  function updateMove(tw) {
+    const wrap = $('moveWrap');
+    wrap.hidden = !multi();
+    if (wrap.hidden) return;
+    $('moveBox').hidden = !ui.moveOpen;
+    $('moveToggle').hidden = ui.moveOpen;
+    if (!ui.moveOpen) return;
+    const others = myTowns().filter(o => o.idx !== tw.idx);
+    if (!others.some(o => o.idx === ui.move.to)) ui.move.to = others[0].idx;
+    const sel = $('moveTo'), sig = tw.idx + ':' + others.map(o => o.idx + o.name).join(',');
+    if (sel.dataset.sig !== sig) {
+      sel.dataset.sig = sig;
+      sel.innerHTML = others.map(o => '<option value="' + o.idx + '">' + esc(o.name) + ' ' + coord(S.tiles[o.idx]) + '</option>').join('');
+    }
+    if (document.activeElement !== sel) sel.value = String(ui.move.to);
+    KEYS.forEach(k => { ui.move.u[k] = k === 'settler' ? 0 : clamp(Math.floor(ui.move.u[k] || 0), 0, tw.hu[k]); });
+    const ks = KEYS.filter(k => k !== 'settler' && tw.hu[k] > 0);
+    const box = $('moveRows'), rsig = tw.idx + ':' + ks.join(',');
+    if (box.dataset.sig !== rsig) {
+      box.dataset.sig = rsig;
+      box.innerHTML = ks.length ? ks.map(k =>
+        '<div class="urow">' + icon(UNITS[k].icon, 'uic') + '<span class="un">' + UNITS[k].name + '<small id="mvh-' + k + '"></small></span>' +
+        '<div class="stepper sm"><button type="button" data-act="mv-minus" data-unit="' + k + '" aria-label="Färre ' + UNITS[k].many + '">−</button>' +
+        '<input id="mvu-' + k + '" type="number" inputmode="numeric" min="0" value="0" aria-label="Antal ' + UNITS[k].many + '">' +
+        '<button type="button" data-act="mv-plus" data-unit="' + k + '" aria-label="Fler ' + UNITS[k].many + '">+</button></div>' +
+        '<button class="chip" type="button" data-act="mv-all" data-unit="' + k + '">Alla</button></div>').join('') :
+        '<p class="muted">Inga trupper hemma i ' + esc(tw.name) + ' just nu.</p>';
+      ks.forEach(k => {
+        $('mvu-' + k).addEventListener('input', e => { const v = parseInt(e.target.value, 10); if (v >= 0) { ui.move.u[k] = v; updateMove(TW()); } });
+        $('mvu-' + k).addEventListener('blur', () => updateMove(TW()));
+      });
+    }
+    ks.forEach(k => {
+      const inp = $('mvu-' + k);
+      if (document.activeElement !== inp) inp.value = String(ui.move.u[k]);
+      setText($('mvh-' + k), ' av ' + tw.hu[k]);
+    });
+    const all = ks.reduce((n, k) => n + tw.hu[k], 0);
+    $('mvEvery').hidden = all < 1; setText($('mvEvery').querySelector('b'), String(all));
+    const n = E.total(ui.move.u), dest = S.towns[ui.move.to];
+    $('moveInfo').innerHTML = 'Framme om <b>' + dur(E.travelMs(S, tw.idx, dest.idx)) + '</b> (' + rutor(E.dist(S.tiles[tw.idx], S.tiles[dest.idx])) + '). ' +
+      'Trupperna tillhör sedan ' + esc(dest.name) + ': dess verkstad ger bonus och dess potatisland föder dem.';
+    $('moveBtn').disabled = n < 1;
+    setText($('moveBtn'), n < 1 ? 'Välj trupper' : 'Flytta ' + unitShort(ui.move.u));
+  }
   function updateVillage() {
     const p = me(), c = S.cfg, tw = TW();
     renderTownbar();
@@ -3650,6 +3730,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     $('vnote').hidden = false;
     $('vnote').classList.toggle('open', !tw.start);
     updateShip(tw);
+    updateMove(tw);
     const gph = E.goldPerHour(S, tw);
     for (const b of BLD) {
       const f = rows[b.key], L = tw.buildings[b.key], def = c.buildings[b.key];
@@ -3685,8 +3766,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     setText($('trainNoneWhere'), multi() ? ' i ' + tw.name : '');
     $('trainNone').hidden = hasB; $('trainBox').hidden = !hasB;
     if (!hasB) return;
-    const kinds = KEYS.filter(k => E.canTrain(tw, k));
-    if (!kinds.includes(ui.trainK)) ui.trainK = 'soldier';
+    const kinds = KEYS.filter(k => E.canTrain(tw, k) && !(k === 'settler' && (tw.settlers || 0) >= 1));
+    const k = curTrainK(tw);
     const seg = $('trainKinds');
     seg.hidden = kinds.length < 2;
     const segSig = kinds.join(',');
@@ -3695,15 +3776,17 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       seg.style.gridTemplateColumns = 'repeat(' + kinds.length + ', minmax(0, 1fr))';
       seg.innerHTML = kinds.map(k => '<button type="button" data-act="tkind" data-unit="' + k + '" aria-pressed="false">' + icon(UNITS[k].icon, 'uic') + '<span>' + UNITS[k].name + '</span></button>').join('');
     }
-    seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.unit === ui.trainK)));
-    const k = ui.trainK, uc = c.units[k];
-    setText($('tstats'), kinds.length > 1 ? statLine(k) + (k === 'settler' ? '. Skicka den till en tom ruta på kartan.' : '') : '');
+    seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.unit === k)));
+    const uc = c.units[k], one = k === 'settler';
+    setText($('tstats'), kinds.length > 1 ? statLine(k) + (one ? '. Varje by kan träna en. Skicka den till en tom ruta på kartan.' : '') : '');
     $('tstats').hidden = kinds.length < 2;
     const T = E.trainMs(S, tw);
-    const maxN = Math.floor(tw.gold / uc.cost);
+    const maxN = one ? Math.min(1, Math.floor(tw.gold / uc.cost)) : Math.floor(tw.gold / uc.cost);
     setText($('tmax'), fmt(maxN));
-    const n = ui.trainN;
-    if (document.activeElement !== $('trainN')) $('trainN').value = n;
+    const n = one ? 1 : ui.trainN;                     // en utvandrare åt gången; antalet för andra trupper står kvar
+    if (document.activeElement !== $('trainN') || one) $('trainN').value = n;
+    $('trainN').disabled = one;
+    $('trainBox').querySelectorAll('[data-act="tminus"], [data-act="tplus"], [data-act="tmax"]').forEach(x => { x.disabled = one; });
     setText($('tcost'), fmt(n * uc.cost));
     $('trainBtn').disabled = tw.gold < n * uc.cost;
     setText($('tinfo'), secs(T) + ' per trupp · ' + unitN(k, n) + ' tar ' + dur(n * T));
@@ -3744,7 +3827,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       btn.disabled = dis;
       setText($('lab-' + k + '-when'), when);
     }
-    setText($('lab-settler-when'), L >= c.units.settler.lab ? 'Tränas i kasernen' : 'Kräver nivå ' + c.units.settler.lab);
+    setText($('lab-settler-when'), L < c.units.settler.lab ? 'Kräver nivå ' + c.units.settler.lab : (tw.settlers || 0) >= 1 ? 'Byn har redan tränat sin utvandrare' : 'Tränas i kasernen, en per by');
     const r = tw.labbing;
     $('labQueue').hidden = !r;
     if (r) {
@@ -3977,7 +4060,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   }
   function renderSheet() {
     const el = $('sheet');
-    if (!S || ui.sel < 0) { if (!el.hidden) { el.hidden = true; clampCam(); } ui.sheetSig = ''; return; }
+    if (!S || ui.sel < 0) { if (!el.hidden) { el.hidden = true; placeSheet(); clampCam(); } ui.sheetSig = ''; return; }
     if (ui.fwd) { renderFwd(el); return; }
     const t = S.tiles[ui.sel], p = me(), c = S.cfg, here = S.towns[ui.sel];
     const anySettler = myTowns().some(tw => tw.hu.settler > 0);
@@ -4035,9 +4118,26 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       const fs = $('fromSel');
       if (fs) fs.addEventListener('change', e => { ui.sendFrom = +e.target.value; ui.rowSig = ''; prefillSend(); updateSheet(); });
       prefillSend();
+      updateSheet();
+      placeSheet(true);
       clampCam();
+      return;
     }
     updateSheet();
+  }
+  // Dator: panelen får en fast överkant medan samma ruta är vald, så att den växer nedåt
+  // i stället för uppåt. Då hoppar inte knapparna när prognosen blir längre.
+  function placeSheet(reset) {
+    const el = $('sheet');
+    if (!ui.desk || el.hidden) { el.style.top = el.style.bottom = el.style.maxHeight = ''; return; }
+    const H = $('view-map').clientHeight;
+    if (reset || !el.style.top) {
+      el.style.top = el.style.bottom = el.style.maxHeight = '';
+      const h = el.offsetHeight;
+      el.style.top = Math.max(146, H - 16 - h - 110) + 'px';
+      el.style.bottom = 'auto';
+    }
+    el.style.maxHeight = Math.max(160, H - parseFloat(el.style.top) - 16) + 'px';
   }
   // ---------- Sänd vidare: förstärkning från ett eget objektiv till ett annat ----------
   // Välj trupper ur garnisonen och tryck sedan på målet på kartan. Trupperna anfaller aldrig.
@@ -4053,7 +4153,10 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
         '<p class="fwd-hint" id="fwdInfo"></p>' +
         '<div class="row"><button class="btn" type="button" data-act="fwd-cancel">Avbryt</button><button class="btn primary" type="button" data-act="fwd-send" id="fwdSend">Skicka</button></div>';
       el.hidden = false;
+      updateFwd();
+      placeSheet(true);
       clampCam();
+      return;
     }
     updateFwd();
   }
@@ -4721,6 +4824,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', String(ui.desk ? b.dataset.tab === side : b.dataset.tab === ui.tab)));
     positionToasts();
     if (!$('view-map').hidden) resizeMap();
+    placeSheet(true);
   }
   function setTab(name) {
     ui.tab = name;
@@ -4770,7 +4874,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     toastSeen = reportSeen = last ? last.id : 0;
     incomingSeen = new Set(S.armies.map(a => a.id));
     ui.sel = -1; ui.sheetSig = ui.troopsSig = ui.reportsSig = ui.townSig = ''; ui.confirmRecall = false;
-    ui.trainK = 'soldier'; ui.sendU = E.U();
+    ui.trainKs = {}; ui.sendU = E.U();
+    ui.moveOpen = false; ui.move = { to: -1, u: E.U() };
+    if (!$('moveWrap').children.length) buildMove();
     ui.town = ui.sendFrom = S.players[ME].village;
     cam.ready = false;
     if (!$('ledger').children.length) buildLedger();
@@ -4985,14 +5091,14 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       }
       case 'tminus': setTrainN(ui.trainN - 1); updateTraining(TW()); break;
       case 'tplus': setTrainN(ui.trainN + 1); updateTraining(TW()); break;
-      case 'tmax': setTrainN(Math.floor(TW().gold / S.cfg.units[ui.trainK].cost)); updateTraining(TW()); break;
+      case 'tmax': setTrainN(Math.floor(TW().gold / S.cfg.units[curTrainK(TW())].cost)); updateTraining(TW()); break;
       case 'tkind': {
-        ui.trainK = b.dataset.unit;
+        ui.trainKs[TW().idx] = b.dataset.unit;
         updateTraining(TW());
         break;
       }
       case 'train': {
-        const n = ui.trainN, k = ui.trainK, tw = TW();
+        const tw = TW(), k = curTrainK(tw), n = k === 'settler' ? 1 : ui.trainN;
         if (dispatch({ type: 'train', town: tw.idx, unit: k, count: n }).ok) toast(unitN(k, n) + ' i kö i kasernen' + inTown(tw.idx) + '.');
         break;
       }
@@ -5027,6 +5133,22 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       case 'close-sheet': ui.fwd = null; selectTile(-1); break;
       case 'standings': openStand(); break;
       case 'ship-toggle': ui.shipOpen = !ui.shipOpen; updateShip(TW()); break;
+      case 'move-toggle': ui.moveOpen = !ui.moveOpen; updateMove(TW()); break;
+      case 'mv-minus': ui.move.u[b.dataset.unit] = (ui.move.u[b.dataset.unit] || 0) - 1; updateMove(TW()); break;
+      case 'mv-plus': ui.move.u[b.dataset.unit] = (ui.move.u[b.dataset.unit] || 0) + 1; updateMove(TW()); break;
+      case 'mv-all': ui.move.u[b.dataset.unit] = TW().hu[b.dataset.unit]; updateMove(TW()); break;
+      case 'mv-every': { const u = E.U(TW().hu); u.settler = 0; ui.move.u = u; updateMove(TW()); break; }
+      case 'mv-clear': ui.move.u = E.U(); updateMove(TW()); break;
+      case 'move-send': {
+        const tw = TW(), to = ui.move.to, u = E.U(ui.move.u);
+        u.settler = 0;
+        if (dispatch({ type: 'send', from: tw.idx, to, units: u }).ok) {
+          toast(unitShort(u) + ' flyttar till ' + townName(to) + ', framme om ' + dur(E.travelMs(S, tw.idx, to)) + '.');
+          ui.move.u = E.U();
+          updateMove(TW());
+        }
+        break;
+      }
       case 'ship-minus': ui.ship[b.dataset.res] = Math.max(0, (ui.ship[b.dataset.res] || 0) - 10); updateShip(TW()); break;
       case 'ship-plus': ui.ship[b.dataset.res] = (ui.ship[b.dataset.res] || 0) + 10; updateShip(TW()); break;
       case 'ship-all': { const tw = TW(); ui.ship[b.dataset.res] = Math.floor((b.dataset.res === 'gold' ? tw.gold : tw.food) + 1e-9); updateShip(tw); break; }
@@ -5820,7 +5942,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       '<b>Guldgruvan</b> och <b>potatislandet</b> ger ' + n1((c.productionGrowth - 1) * 100) + ' % mer för varje nivå, och varje uppgradering kostar ' + n1((c.buildings.goldmine.costGrowth - 1) * 100) + ' % mer än förra. Guldgruvan har inget tak. Byggen kostar guld.',
       'Kasernen tränar trupper, ' + c.soldierTrainSeconds + ' s per trupp på nivå 1. Alla trupper äter <b>1 mat i timmen</b> från byn de tillhör. Tar maten slut lämnar trupper byn.',
       '<b>Soldat</b>: anfall ' + n1(u.soldier.atk) + ', försvar ' + n1(u.soldier.def) + ', ' + u.soldier.cost + ' guld. I <b>forskningscentret</b> (' + c.buildings.lab.costList.join('/') + ' guld för nivå 1–' + c.buildings.lab.costList.length + ') låser du upp nya trupper för ' + u.berserker.unlockCost + ' guld styck: <b>Berserker</b> (nivå 1) anfall ' + n1(u.berserker.atk) + ', försvar ' + n1(u.berserker.def) + '. <b>Sköldgrabb</b> (nivå 2) anfall ' + n1(u.shield.atk) + ', försvar ' + n1(u.shield.def) + '. <b>Scout</b> (nivå 3) anfall ' + n1(u.scout.atk) + ', försvar ' + n1(u.scout.def) + ', spaning ' + n1(u.scout.scout) + '. De nya kostar ' + u.berserker.cost + ' guld att träna.',
-      'På nivå ' + u.settler.lab + ' kan kasernen träna en <b>utvandrare</b> för ' + u.settler.cost + ' guld. Skicka den till en tom ruta så blir rutan en <b>ny by</b> med egna byggnader, egen produktion och eget förråd (den börjar med ' + c.newTownGold + ' guld och ' + c.newTownFood + ' mat). Utvandrare strider inte, försvarar inte och kan inte skickas med andra trupper.',
+      'På nivå ' + u.settler.lab + ' kan kasernen träna en <b>utvandrare</b> för ' + u.settler.cost + ' guld, högst en per by. Skicka den till en tom ruta så blir rutan en <b>ny by</b> med egna byggnader, egen produktion och eget förråd (den börjar med ' + c.newTownGold + ' guld och ' + c.newTownFood + ' mat). Utvandrare strider inte, försvarar inte och kan inte skickas med andra trupper.',
       'Startbyn kan inte anfallas, men <b>nya byar kan det</b>. Trupperna hemma försvarar byn. Vinner anfallaren tar de överlevande med sig guld och mat lika mycket som deras grundanfall, fördelat efter vad som finns i byns förråd: 9 soldater mot ett förråd med 20 guld och 10 mat tar hem 6 guld och 3 mat.',
       'Varje trupp tillhör en by. Flyttar du trupper till en annan av dina byar tillhör de sedan den byn och får dess verkstadsbonus. Erfarenhet, nivåer och färdigheter gäller alla dina byar.',
       'Kartan är ' + c.mapSize + '×' + c.mapSize + ' rutor. Guldgruvor ger +' + Math.round(c.goldMineGoldBonus * 100) + ' % guld, skogar +' + Math.round(c.forestFoodBonus * 100) + ' % mat (i alla dina byar) och monument <b>' + c.vpPerMonumentPerMinute + ' vinstpoäng per minut</b>.',
