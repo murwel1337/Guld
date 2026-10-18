@@ -1194,7 +1194,8 @@ const Engine = (function () {
     baseCapacity: 800,            // förråden rymmer 800 guld och 800 mat från start
     capacityPerLevel: 1200,       // +1 200 per nivå på skattkammare/jordkällare
     soldierTrainSeconds: 60,      // gäller alla trupptyper [antagande för de nya]
-    barracksSpeedFactor: 0.8,     // [antagande] träningstid × 0,8 per kasernnivå över 1
+    barracksSpeedFactor: 0.8,     // [antagande] träningstid × 0,8 per kasernnivå över 1 (till nivå 10)
+    barracksSpeedFactorHigh: 0.9, // över nivå 10: × 0,9 per nivå
     marchFieldsPerMinute: 10,
     // Förluster: varje sida förlorar andelen motståndarens poäng / egna poäng av sina
     // trupper (högst alla), avrundat nedåt. 15 mot 5 → anfallaren förlorar 1/3.
@@ -1211,7 +1212,8 @@ const Engine = (function () {
     unlockMinutes: 2,             // [antagande] en upplåsning i forskningscentret tar 2 minuter
     researchBonusPerLevel: 0.04,  // verkstaden: +4 % anfall eller försvar per nivå
     researchCostFirst: 40,        // [antagande] nivå 1 kostar 40 guld ...
-    researchCostGrowth: 1.5,      // [antagande] ... och varje nivå × 1,5
+    researchCostGrowth: 1.5,
+    researchCostGrowthHigh: 1.2,  // förbättringar över nivå 10 blir 20 % dyrare per nivå (ryms i en full skattkammare)      // [antagande] ... och varje nivå × 1,5
     researchMinutesPerLevel: 2,   // [antagande] nivå L tar L × 2 minuter
     workshopSpeedFactor: 0.9,     // varje verkstadsnivå över 1 gör förbättringarna 10 % snabbare
     spawnBaseChance: 0.20,
@@ -1254,8 +1256,9 @@ const Engine = (function () {
       // max: null betyder inget tak.
       goldmine: { start: 1, max: null, costFirst: 8, costGrowth: 1.5 }, // [antagande] kostnaden × 1,5 per nivå: 8, 12, 18, 27 …
       farm:     { start: 1, max: 10, costFirst: 8, costGrowth: 1.5 },   // [antagande]
-      barracks: { start: 0, max: 10, costBase: 20, costPerLevel: 20 },  // 20 + 20 × nivå
-      workshop: { start: 0, max: 10, costBase: 50, costPerLevel: 50 },  // [antagande]
+      // Kasern och verkstad: 20 + 20 × nivå (50 + 50 × nivå) upp till nivå 10, därefter × 1,35 per nivå, högst nivå 20.
+      barracks: { start: 0, max: 20, costBase: 20, costPerLevel: 20, steepFrom: 10, steepGrowth: 1.35 },
+      workshop: { start: 0, max: 20, costBase: 50, costPerLevel: 50, steepFrom: 10, steepGrowth: 1.35 },
       lab:      { start: 0, max: 4, costList: [30, 50, 80, 120] },      // forskningscenter [antagande: nivå 4 kostar 120]
       treasury: { start: 0, max: 10, costBase: 40, costPerLevel: 40 },  // [antagande]
       granary:  { start: 0, max: 10, costBase: 40, costPerLevel: 40 },  // [antagande]
@@ -1421,7 +1424,7 @@ const Engine = (function () {
     const nRivals = humans ? 0 : rival ? (opts.rivalCount != null ? opts.rivalCount : cfg.rivalCount) : 0;
     const N = cfg.mapSize;
     const s = {
-      v: 11, cfg, seed, rng: seed, time: 0, nextSpawnAt: MINUTE,
+      v: 12, cfg, seed, rng: seed, time: 0, nextSpawnAt: MINUTE,
       tiles: [], towns: {}, players: {}, order: [], armies: [], caravans: [], log: [],
       nextId: 1, winner: null, endedAt: null, online: !!humans,
     };
@@ -1564,6 +1567,7 @@ const Engine = (function () {
     const b = s.cfg.buildings[key];
     if (b.costList) return b.costList[Math.min(level, b.costList.length - 1)];
     if (b.costGrowth) return Math.round(b.costFirst * Math.pow(b.costGrowth, level - b.start));
+    if (b.steepFrom && level >= b.steepFrom) return Math.round((b.costBase + b.costPerLevel * (b.steepFrom - 1)) * Math.pow(b.steepGrowth, level - b.steepFrom + 1));
     return b.costBase + b.costPerLevel * level;
   }
   function goldCap(s, tw) { return s.cfg.baseCapacity + s.cfg.capacityPerLevel * tw.buildings.treasury; }
@@ -1598,14 +1602,18 @@ const Engine = (function () {
   function trainMs(s, tw, level) {
     const L = level != null ? level : tw.buildings.barracks;
     if (L < 1) return Infinity;
-    return Math.round(s.cfg.soldierTrainSeconds * 1000 * Math.pow(s.cfg.barracksSpeedFactor, L - 1));
+    const hi = Math.max(0, L - 10);
+    return Math.round(s.cfg.soldierTrainSeconds * 1000 * Math.pow(s.cfg.barracksSpeedFactor, Math.min(L, 10) - 1) * Math.pow(s.cfg.barracksSpeedFactorHigh || 1, hi));
   }
   function canTrain(tw, k) {
     if (k === 'soldier') return true;
     if (k === 'settler') return tw.buildings.lab >= CONFIG.units.settler.lab;
     return !!(tw.unlocked && tw.unlocked[k]);
   }
-  function researchCost(s, level) { return Math.round(s.cfg.researchCostFirst * Math.pow(s.cfg.researchCostGrowth, level - 1)); }
+  function researchCost(s, level) {
+    const c = s.cfg, lo = Math.min(level, 10) - 1, hi = Math.max(0, level - 10);
+    return Math.round(c.researchCostFirst * Math.pow(c.researchCostGrowth, lo) * Math.pow(c.researchCostGrowthHigh || c.researchCostGrowth, hi));
+  }
   function researchMs(s, level, tw) {
     const W = tw ? tw.buildings.workshop : 1;
     return Math.round(level * s.cfg.researchMinutesPerLevel * MINUTE * Math.pow(s.cfg.workshopSpeedFactor || 1, Math.max(0, W - 1)));
@@ -2682,6 +2690,14 @@ const Engine = (function () {
         tw.settlers = (tw.hu.settler > 0 || queued || away) ? 1 : 0;
       }
       s.v = 11;
+      return migrate(s);
+    }
+    if (s.v === 11) {
+      // 11 → 12: kasern och verkstad går till nivå 20, dyrare och med mindre effekt per nivå över 10.
+      for (const k of ['barracks', 'workshop']) s.cfg.buildings[k] = JSON.parse(JSON.stringify(CONFIG.buildings[k]));
+      s.cfg.barracksSpeedFactorHigh = CONFIG.barracksSpeedFactorHigh;
+      s.cfg.researchCostGrowthHigh = CONFIG.researchCostGrowthHigh;
+      s.v = 12;
       return s;
     }
     if (s.v !== 6) return s;
@@ -2696,7 +2712,7 @@ const Engine = (function () {
     return migrate(s);
   }
   function isValidSave(s) {
-    return !!(s && s.v >= 6 && s.v <= 11 && s.cfg && Array.isArray(s.tiles) && s.towns && s.players && s.order && s.tiles.length === s.cfg.mapSize * s.cfg.mapSize);
+    return !!(s && s.v >= 6 && s.v <= 12 && s.cfg && Array.isArray(s.tiles) && s.towns && s.players && s.order && s.tiles.length === s.cfg.mapSize * s.cfg.mapSize);
   }
 
   // =====================================================================
@@ -2751,7 +2767,7 @@ const Engine = (function () {
   }
   function decodeView(init, v, prevLog) {
     const cfg = init.cfg, N = cfg.mapSize;
-    const s = { v: 11, cfg, seed: init.seed, rng: 0, time: v.t, nextSpawnAt: v.ns, tiles: [], towns: {}, players: {}, order: v.ord.slice(),
+    const s = { v: 12, cfg, seed: init.seed, rng: 0, time: v.t, nextSpawnAt: v.ns, tiles: [], towns: {}, players: {}, order: v.ord.slice(),
       armies: v.ar, caravans: v.cv, log: [], nextId: v.nid, winner: v.w, endedAt: v.e, online: true, view: true };
     for (let i = 0; i < N * N; i++) s.tiles.push({ x: i % N, y: Math.floor(i / N), type: CODE_TYPE[v.ty[i]], owner: null, u: U(), troops: 0, g: {}, look: init.look[i] });
     for (const r of v.tl) {
@@ -5985,7 +6001,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     return [
       'Du får <b>' + c.baseProduction + ' guld och ' + c.foodBaseProduction + ' mat i timmen</b> från start. Förråden rymmer ' + c.baseCapacity + ' av varje; skattkammaren och jordkällaren rymmer mer.',
       '<b>Guldgruvan</b> och <b>potatislandet</b> ger ' + n1((c.productionGrowth - 1) * 100) + ' % mer för varje nivå, och varje uppgradering kostar ' + n1((c.buildings.goldmine.costGrowth - 1) * 100) + ' % mer än förra. Guldgruvan har inget tak. Byggen kostar guld.',
-      'Kasernen tränar trupper, ' + c.soldierTrainSeconds + ' s per trupp på nivå 1. Alla trupper äter <b>1 mat i timmen</b> från byn de tillhör. Tar maten slut lämnar trupper byn.',
+      'Kasernen och verkstaden går upp till nivå ' + c.buildings.barracks.max + '. Från nivå ' + c.buildings.barracks.steepFrom + ' blir varje nivå ' + Math.round((c.buildings.barracks.steepGrowth - 1) * 100) + ' % dyrare än förra. Kasernen tränar trupper, ' + c.soldierTrainSeconds + ' s per trupp på nivå 1. Alla trupper äter <b>1 mat i timmen</b> från byn de tillhör. Tar maten slut lämnar trupper byn.',
       '<b>Soldat</b>: anfall ' + n1(u.soldier.atk) + ', försvar ' + n1(u.soldier.def) + ', ' + u.soldier.cost + ' guld. I <b>forskningscentret</b> (' + c.buildings.lab.costList.join('/') + ' guld för nivå 1–' + c.buildings.lab.costList.length + ') låser du upp nya trupper för ' + u.berserker.unlockCost + ' guld styck: <b>Berserker</b> (nivå 1) anfall ' + n1(u.berserker.atk) + ', försvar ' + n1(u.berserker.def) + '. <b>Sköldgrabb</b> (nivå 2) anfall ' + n1(u.shield.atk) + ', försvar ' + n1(u.shield.def) + '. <b>Scout</b> (nivå 3) anfall ' + n1(u.scout.atk) + ', försvar ' + n1(u.scout.def) + ', spaning ' + n1(u.scout.scout) + '. De nya kostar ' + u.berserker.cost + ' guld att träna.',
       'På nivå ' + u.settler.lab + ' kan kasernen träna en <b>utvandrare</b> för ' + u.settler.cost + ' guld, högst en per by. Skicka den till en tom ruta så blir rutan en <b>ny by</b> med egna byggnader, egen produktion och eget förråd (den börjar med ' + c.newTownGold + ' guld och ' + c.newTownFood + ' mat). Utvandrare strider inte, försvarar inte och kan inte skickas med andra trupper.',
       'Startbyn kan inte anfallas, men <b>nya byar kan det</b>. Trupperna hemma försvarar byn. Vinner anfallaren tar de överlevande med sig guld och mat lika mycket som deras grundanfall, fördelat efter vad som finns i byns förråd: 9 soldater mot ett förråd med 20 guld och 10 mat tar hem 6 guld och 3 mat.',
