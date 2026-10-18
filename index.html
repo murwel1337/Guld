@@ -436,6 +436,7 @@ input[type="range"] { width: 100%; accent-color: var(--falu-hi); height: 28px; m
 /* Trupptyper */
 svg.uic { width: 20px; height: 20px; flex: none; }
 .res-txt .name svg.uic { align-self: center; }
+.res-txt .name .nm { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 .seg.units { gap: 6px; }
 .seg.units button {
   height: auto;
@@ -468,6 +469,13 @@ svg.uic { width: 20px; height: 20px; flex: none; }
 .tally div { padding: 8px 10px; background: var(--slab-2); border-radius: var(--r); }
 .tally b { display: block; font: 700 24px/1.05 var(--f-num); font-variant-numeric: tabular-nums; }
 .tally span { font-size: 13px; color: var(--ink-dim); }
+/* Trupper: antal av varje typ i den valda byn */
+.ugrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+.ucell { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; column-gap: 8px; padding: 8px 10px; background: var(--slab-2); border-radius: var(--r); }
+.ucell svg.uic { grid-row: span 2; width: 26px; height: 26px; }
+.ucell b { font: 700 22px/1.05 var(--f-num); font-variant-numeric: tabular-nums; }
+.ucell span { font-size: 13px; line-height: 1.2; color: var(--ink-dim); overflow-wrap: anywhere; }
+.ucell small { grid-column: 1 / -1; margin-top: 2px; font: 500 12px/1.2 var(--f-num); color: var(--ink-faint); }
 .list { display: grid; border-top: 1px solid var(--seam); }
 .item {
   display: grid;
@@ -601,35 +609,6 @@ details[open] summary { margin-bottom: 10px; }
 .confirm p { margin: 0; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; }
 .row .btn { flex: 1; }
-
-/* ---------- Toasts ---------- */
-.toasts {
-  position: fixed;
-  z-index: 15;
-  top: var(--toast-top, 120px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(420px, calc(100% - 32px));
-  display: grid;
-  gap: 6px;
-  pointer-events: none;
-}
-.toast {
-  padding: 9px 12px;
-  background: var(--slab-3);
-  border: 1px solid var(--seam);
-  border-left: 3px solid var(--ink-dim);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
-  font-size: 14px;
-  animation: toast-in .25s ease-out;
-}
-.toast.good { border-left-color: var(--moss); }
-.toast.bad { border-left-color: var(--bad); }
-.toast.gold { border-left-color: var(--gold); }
-.toast.rival { border-left-color: var(--blue-hi); }
-@keyframes toast-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
 
 /* ---------- Dator ---------- */
 @media (min-width: 960px) {
@@ -962,9 +941,13 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   <section class="view side" id="view-troops" aria-label="Trupper" hidden>
     <div class="side-inner">
       <div class="v-head"><h2 class="h2">Trupper</h2></div>
+      <div class="townbar" id="trainTowns" role="group" aria-label="Välj by" hidden></div>
+      <div class="stack" id="homeSec">
+        <h3 class="eyebrow" id="homeHead">Hemma</h3>
+        <div class="ugrid" id="homeUnits"></div>
+      </div>
       <div class="stack" id="trainSec">
         <h3 class="eyebrow" id="trainHead">Träna</h3>
-        <div class="townbar" id="trainTowns" role="group" aria-label="Träna i by" hidden></div>
         <div id="trainSlot"></div>
       </div>
       <div class="side-stack" id="troops"></div>
@@ -983,8 +966,6 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     </div>
   </section>
 </div>
-
-<div class="toasts" id="toasts" aria-live="polite"></div>
 
 <div class="overlay solid" id="ov-start">
   <div class="card">
@@ -1169,11 +1150,13 @@ window.GP_SOUNDS = {trained: 'SUQzBAAAAAABUlRYWFgAAAASAAADbWFqb3JfYnJhbmQAM2dwNA
    - All slump kommer från ett seedat talflöde i state.rng. Samma seed +
      samma actions vid samma speltid ger exakt samma spel.
    - Byar: s.towns[rutans index] har egna resurser, byggnader, trupper hemma,
-     träningskö, verkstad och forskningscenter. Startbyn går inte att anfalla;
+     träningskö, verkstad och forskningscenter. Verkstadens förbättringar gäller
+     spelarens alla byar (p.up) och kan köas i varje verkstad. Startbyn går inte att anfalla;
      byar som grundas med en utvandrare går att anfalla och plundra.
    - Trupper lagras per typ: { soldier, berserker, shield, scout, settler }.
      Varje trupp tillhör en by: hemma i byn (town.hu), i en garnison på ett
-     objektiv (tile.g[by]) eller i en armé (army.home). Byns verkstad ger bonus.
+     objektiv (tile.g[by]) eller i en armé (army.home). Byn föder sina trupper.
+   - Skogar går inte att ta över: där finns bara neutrala soldater att döda för guld och exp.
    - Dimma: ingen ser hur många som står på en annan spelares ruta eller by
      eller hur stora andras arméer är. Varje spelare har p.intel med det den
      sett (vid spaning eller strid). Bottarna följer samma regler.
@@ -1228,8 +1211,9 @@ const Engine = (function () {
     researchCostGrowth: 1.5,
     researchCostGrowthHigh: 1.2,
     wallBonusPerLevel: 0.05,      // muren: +5 % försvar per nivå för byns försvarare
-    plunderFactor: 3,             // vid plundring bär varje överlevande 3 × sitt grundanfall  // förbättringar över nivå 10 blir 20 % dyrare per nivå (ryms i en full skattkammare)      // [antagande] ... och varje nivå × 1,5
+    plunderFactor: 3,             // vid plundring bär varje överlevande 3 × sitt grundanfall
     researchMinutesPerLevel: 2,   // [antagande] nivå L tar L × 2 minuter
+    researchQueueMax: 5,          // [antagande] högst 5 förbättringar i en verkstad (pågående + kö)
     workshopSpeedFactor: 0.9,     // varje verkstadsnivå över 1 gör förbättringarna 10 % snabbare
     spawnBaseChance: 0.20,
     spawnChancePerMinute: 0.005,
@@ -1239,7 +1223,6 @@ const Engine = (function () {
     // Tak för neutrala soldater som dyker upp på ett objektiv. Spelare kan ha hur
     // många trupper som helst på sina objektiv.
     tileCap: { mine: 5, forest: 5, monument: 10 },
-    forestFoodBonus: 0.10,        // per skog, för varje by du har
     goldMineGoldBonus: 0.10,      // per guldgruva, för varje by du har
     vpPerMonumentPerMinute: 1,
     vpToWin: 100,
@@ -1260,7 +1243,6 @@ const Engine = (function () {
       def2: { tree: 'defense', max: 1, requires: 3, per: 1.5 },    // 50 % snabbare förstärkning
       wire: { tree: 'defense', max: 1, requires: 3, flat: 1 },     // taggtråd: +1 försvar på alla dina objektiv
       eco:  { tree: 'economy', max: 3, per: 0.05 },               // +5/10/15 % guld per guldgruva
-      eco2: { tree: 'economy', max: 3, per: 0.10 },               // 10/20/30 % chans per skog och minut att få en soldat
     },
     foodPerDeserter: 10,          // [antagande] vid matbrist lämnar 1 trupp per 10 mat som fattas
     stepMs: 500,
@@ -1319,6 +1301,8 @@ const Engine = (function () {
   }
 
   function isObjective(t) { return t.type === 'mine' || t.type === 'forest' || t.type === 'monument'; }
+  // Rutor som går att ta över. Skogar har bara neutrala soldater att döda.
+  function capturable(t) { return t.type === 'mine' || t.type === 'monument'; }
   function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
   const round2 = x => Math.round(x * 100) / 100;
 
@@ -1374,7 +1358,7 @@ const Engine = (function () {
       gold, food, buildings: b, hu: U(), home: 0,
       tq: [], queue: 0, trainProgress: 0, batch: 0,
       unlocked: { berserker: false, shield: false, scout: false }, labbing: null,
-      research: { attack: 0, defense: 0 }, unitUp: { soldier: 0, berserker: 0, shield: 0 }, researching: null,
+      researching: null, rq: [],       // verkstaden: pågående förbättring och kö (nivåerna ligger på spelaren)
       settlers: 0,                     // utvandrare som byn har tränat (högst en per by)
       starve: 0, founded: s.time,
     };
@@ -1440,7 +1424,7 @@ const Engine = (function () {
     const nRivals = humans ? 0 : rival ? (opts.rivalCount != null ? opts.rivalCount : cfg.rivalCount) : 0;
     const N = cfg.mapSize;
     const s = {
-      v: 13, cfg, seed, rng: seed, time: 0, nextSpawnAt: MINUTE,
+      v: 14, cfg, seed, rng: seed, time: 0, nextSpawnAt: MINUTE,
       tiles: [], towns: {}, players: {}, order: [], armies: [], caravans: [], log: [],
       nextId: 1, winner: null, endedAt: null, online: !!humans,
     };
@@ -1570,6 +1554,7 @@ const Engine = (function () {
       intel: {},
       exp: 0, level: 0, levelExp: 0, points: 0,
       skills: Object.fromEntries(Object.keys(cfg.skills).map(k => [k, 0])),
+      up: newUp(),                     // verkstadens förbättringar, gäller alla spelarens byar
       vpMs: 0,
       stats: { trained: 0, killed: 0, lost: 0, battles: 0, captured: 0, loot: 0, deserted: 0, scouted: 0, plundered: 0, towns: 1 },
     };
@@ -1597,7 +1582,7 @@ const Engine = (function () {
     const bonus = p.bot && s.cfg.rivals[p.bot] ? (s.cfg.rivals[p.bot].goldBonus || 1) : 1;
     return prodAtLevel(s, tw.buildings.goldmine) * (1 + mineBonus(s, p) * countOwned(s, p.id, 'mine')) * bonus;
   }
-  function foodProdPerHour(s, tw) { return foodAtLevel(s, tw.buildings.farm) * (1 + s.cfg.forestFoodBonus * countOwned(s, tw.owner, 'forest')); }
+  function foodProdPerHour(s, tw) { return foodAtLevel(s, tw.buildings.farm); }
   // Alla trupper som tillhör en by (hemma, i garnisoner och på väg), per typ.
   function townUnits(s, tw) {
     const u = U(tw.hu), key = String(tw.idx);
@@ -1634,9 +1619,27 @@ const Engine = (function () {
     const W = tw ? tw.buildings.workshop : 1;
     return Math.round(level * s.cfg.researchMinutesPerLevel * MINUTE * Math.pow(s.cfg.workshopSpeedFactor || 1, Math.max(0, W - 1)));
   }
-  function researchLevel(tw, kind) { return UNIT_UP.includes(kind) ? ((tw.unitUp && tw.unitUp[kind]) || 0) : tw.research[kind]; }
+  // Verkstadens förbättringar ligger på spelaren och gäller alla byar.
+  function newUp() { return { attack: 0, defense: 0, soldier: 0, berserker: 0, shield: 0 }; }
+  function researchLevel(p, kind) { return (p && p.up && p.up[kind]) || 0; }
+  // Förbättringar av samma sort som pågår eller står i kö i någon av spelarens verkstäder.
+  function researchPending(s, p, kind) {
+    let n = 0;
+    for (const tw of townsOf(s, p)) {
+      if (tw.researching && tw.researching.kind === kind) n++;
+      for (const q of tw.rq || []) if (q.kind === kind) n++;
+    }
+    return n;
+  }
+  function nextResearch(s, p, kind) { return researchLevel(p, kind) + researchPending(s, p, kind) + 1; }
+  function resQueueLen(tw) { return (tw.researching ? 1 : 0) + (tw.rq ? tw.rq.length : 0); }
+  // En trupptyp går att förbättra när den är upplåst i någon av spelarens byar.
+  function unitUnlocked(s, p, k) { return k === 'soldier' || townsOf(s, p).some(tw => canTrain(tw, k)); }
   // Bonus per trupptyp: allmän bonus + verkstadens förbättring av just den trupptypen (+4 % per nivå).
-  function unitBonus(s, tw, k) { return tw && tw.unitUp && tw.unitUp[k] ? s.cfg.researchBonusPerLevel * tw.unitUp[k] : 0; }
+  function unitBonus(s, tw, k) {
+    const L = tw && UNIT_UP.includes(k) ? researchLevel(s.players[tw.owner], k) : 0;
+    return L ? s.cfg.researchBonusPerLevel * L : 0;
+  }
   function attackVec(s, p, tw) { const m = attackMult(s, p, tw), v = {}; for (const k of UNIT_KEYS) v[k] = m + unitBonus(s, tw, k); return v; }
   function defenseVec(s, p, tw) { const m = defenseMult(s, p, tw), v = {}; for (const k of UNIT_KEYS) v[k] = m + unitBonus(s, tw, k); return v; }
   // Garnison med trupper från flera byar: varje trupptyp får sina byars bonus, viktat efter antal.
@@ -1651,9 +1654,9 @@ const Engine = (function () {
     }
     return v;
   }
-  // Bonus = byns verkstad + spelarens färdigheter (globala).
-  function attackMult(s, p, tw) { return p ? 1 + (tw ? s.cfg.researchBonusPerLevel * tw.research.attack : 0) + s.cfg.skills.atk.per * p.skills.atk : 1; }
-  function defenseMult(s, p, tw) { return p ? 1 + (tw ? s.cfg.researchBonusPerLevel * tw.research.defense : 0) + s.cfg.skills.def.per * p.skills.def : 1; }
+  // Bonus = verkstaden + spelarens färdigheter. tw = null räknar bort verkstaden (den syns inte för andra).
+  function attackMult(s, p, tw) { return p ? 1 + (tw ? s.cfg.researchBonusPerLevel * researchLevel(p, 'attack') : 0) + s.cfg.skills.atk.per * p.skills.atk : 1; }
+  function defenseMult(s, p, tw) { return p ? 1 + (tw ? s.cfg.researchBonusPerLevel * researchLevel(p, 'defense') : 0) + s.cfg.skills.def.per * p.skills.def : 1; }
   // Försvarsbonus för en garnison med trupper från flera byar: viktat efter försvarspoäng.
   function garrisonDefMult(s, t) {
     const p = t.owner ? s.players[t.owner] : null;
@@ -1861,17 +1864,20 @@ const Engine = (function () {
         return ok();
       }
       case 'research': {
+        // Förbättringen gäller alla byar. Är verkstaden upptagen hamnar den i kö (betalas direkt).
         if (!RES_KINDS.includes(a.kind)) return fail('Okänd förbättring.');
-        if (UNIT_UP.includes(a.kind) && !canTrain(tw, a.kind)) return fail('Lås upp trupptypen i forskningscentret först.');
-        if (tw.researching) return fail('Verkstaden arbetar redan med en förbättring.');
-        if (!tw.unitUp) tw.unitUp = { soldier: 0, berserker: 0, shield: 0 };
-        const level = researchLevel(tw, a.kind) + 1;
+        if (UNIT_UP.includes(a.kind) && !unitUnlocked(s, p, a.kind)) return fail('Lås upp trupptypen i forskningscentret först.');
+        if (!p.up) p.up = newUp();
+        if (!tw.rq) tw.rq = [];
+        if (resQueueLen(tw) >= (cfg.researchQueueMax || 1)) return fail('Verkstadens kö är full.');
+        const level = nextResearch(s, p, a.kind);
         if (level > tw.buildings.workshop) return fail('Kräver verkstad nivå ' + level + '.');
         const cost = researchCost(s, level);
         if (tw.gold < cost) return fail('Inte tillräckligt med guld.');
         tw.gold -= cost;
+        if (tw.researching) { tw.rq.push({ kind: a.kind, level }); return ok({ queued: true }); }
         tw.researching = { kind: a.kind, level, start: s.time, done: s.time + researchMs(s, level, tw) };
-        return ok();
+        return ok({ queued: false });
       }
       case 'send': {
         const ft = s.tiles[a.from], tt = s.tiles[a.to];
@@ -1905,7 +1911,7 @@ const Engine = (function () {
           subFrom(fromTown.hu, u); syncTown(fromTown);
           const ar = makeArmy(s, p.id, a.from, ft.x, ft.y, a.from, a.to, u, sendSpeed(s, p, a.to));
           // Valet "stanna och försvara": vid ett lyckat anfall stannar de överlevande på rutan.
-          if (a.stay && isObjective(tt) && tt.owner !== p.id) ar.stay = true;
+          if (a.stay && capturable(tt) && tt.owner !== p.id) ar.stay = true;
           s.armies.push(ar);
         } else if (forward) {
           // Varje grupp behåller sin by. Är rutan inte längre din när de kommer fram går de hem.
@@ -2074,11 +2080,14 @@ const Engine = (function () {
         }
       }
     }
-    if (tw.researching && s.time >= tw.researching.done) {
+    // Varje färdig förbättring höjer spelarens nivå med ett; nästa i kön startar direkt.
+    while (tw.researching && s.time >= tw.researching.done) {
       const r = tw.researching;
-      if (UNIT_UP.includes(r.kind)) tw.unitUp[r.kind] = r.level; else tw.research[r.kind] = r.level;
-      tw.researching = null;
-      log(s, { kind: 'research', player: p.id, town: tw.idx, which: r.kind, level: r.level });
+      if (!p.up) p.up = newUp();
+      p.up[r.kind] = (p.up[r.kind] || 0) + 1;
+      log(s, { kind: 'research', player: p.id, town: tw.idx, which: r.kind, level: p.up[r.kind] });
+      const nx = tw.rq && tw.rq.length ? tw.rq.shift() : null;
+      tw.researching = nx ? { kind: nx.kind, level: nx.level, start: r.done, done: r.done + researchMs(s, nx.level, tw) } : null;
     }
     if (tw.labbing && s.time >= tw.labbing.done) {
       tw.unlocked[tw.labbing.unit] = true;
@@ -2120,7 +2129,7 @@ const Engine = (function () {
 
   function learn(s, p, idx) {
     const t = s.tiles[idx];
-    if (t.owner === p.id) { delete p.intel[idx]; return; }
+    if (t.owner === p.id || t.owner === null) { delete p.intel[idx]; return; }
     const u = defendersAt(s, idx), tw = s.towns[idx];
     p.intel[idx] = { t: s.time, u, total: total(u) };
     if (tw) { p.intel[idx].gold = Math.floor(tw.gold); p.intel[idx].food = Math.floor(tw.food); }
@@ -2185,6 +2194,12 @@ const Engine = (function () {
     const staying = u => (a.stay || cfg.stayAfterCapture) ? U(u) : U();
     // Taggtråd: ägarens objektiv har +1 i försvar, även när ingen står där.
     const wire = wireBonus(s, dp);
+    if (D === 0 && !wire && !capturable(tile)) {
+      // En tom skog: inget att strida mot och inget att ta, trupperna går hem.
+      goHome(U(a.u));
+      log(s, { kind: 'battle', player: p.id, defender, tile: a.to, A, D: 0, aU: aU0, dU: dU0, aLossU: U(), dLossU: U(), aPow: round2(powerM(cfg, aU0, 'atk', aMul)), dPow: 0, aLoss: 0, dLoss: 0, loot: 0, lootKept: 0, captured: false, cleared: true, survivors: A, stay: 0, seen: true });
+      return;
+    }
     if (D === 0 && !wire) {
       tile.owner = a.owner;
       gClear(tile);
@@ -2212,8 +2227,12 @@ const Engine = (function () {
     const expA = r.dLoss * (defender === null ? cfg.expPerNeutralKill : cfg.expPerPlayerKill);
     const expD = dp ? r.aLoss * cfg.expPerPlayerKill : 0;
 
-    let captured = false, stay = 0;
-    if (tile.troops === 0 && survivors > 0) {
+    let captured = false, stay = 0, cleared = false;
+    if (tile.troops === 0 && survivors > 0 && !capturable(tile)) {
+      // Skogen är rensad men går inte att ta över.
+      goHome(survU);
+      cleared = true;
+    } else if (tile.troops === 0 && survivors > 0) {
       tile.owner = a.owner;
       gClear(tile);
       const st = staying(survU);
@@ -2226,10 +2245,11 @@ const Engine = (function () {
       if (dp) learn(s, dp, a.to);     // försvararen såg vilka som tog rutan
     } else {
       goHome(survU);
-      if (survivors > 0) learn(s, p, a.to);   // överlevande såg försvaret
+      // Överlevande såg försvaret. Dog alla men minst två försvarare stupade vet du också hur många som står kvar.
+      if (survivors > 0 || r.dLoss >= 2) learn(s, p, a.to);
       if (p.bot) { p.avoid = p.avoid || {}; p.avoid[a.to] = s.time + 6 * MINUTE; }  // boten minns misslyckade mål
     }
-    log(s, { kind: 'battle', player: p.id, defender, tile: a.to, A, D, aU: aU0, dU: dU0, aLossU: r.aLossU, dLossU: r.dLossU, aPow: r.aPow, dPow: r.dPow, aLoss: r.aLoss, dLoss: r.dLoss, loot, lootKept, captured, survivors, stay, seen: survivors > 0 || r.dLoss >= 2, expA, expD, wire });
+    log(s, { kind: 'battle', player: p.id, defender, tile: a.to, A, D, aU: aU0, dU: dU0, aLossU: r.aLossU, dLossU: r.dLossU, aPow: r.aPow, dPow: r.dPow, aLoss: r.aLoss, dLoss: r.dLoss, loot, lootKept, captured, cleared, survivors, stay, seen: survivors > 0 || r.dLoss >= 2, expA, expD, wire });
     gainExp(s, p, expA);
     gainExp(s, dp, expD);
   }
@@ -2257,7 +2277,8 @@ const Engine = (function () {
       dp.stats.battles++; dp.stats.lost += r.dLoss; dp.stats.killed += r.aLoss;
     }
     const expA = r.dLoss * cfg.expPerPlayerKill, expD = r.aLoss * cfg.expPerPlayerKill;
-    if (survivors > 0) learn(s, p, a.to); else if (p.bot) { p.avoid = p.avoid || {}; p.avoid[a.to] = s.time + 6 * MINUTE; }
+    if (survivors > 0 || r.dLoss >= 2) learn(s, p, a.to);
+    if (survivors === 0 && p.bot) { p.avoid = p.avoid || {}; p.avoid[a.to] = s.time + 6 * MINUTE; }
     log(s, { kind: 'raid', player: p.id, defender: tw.owner, tile: a.to, A, D, aU: aU0, dU, aLossU: r.aLossU, dLossU: r.dLossU, aPow: r.aPow, dPow: r.dPow, aLoss: r.aLoss, dLoss: r.dLoss, survivors, won, plunder, seen: survivors > 0 || r.dLoss >= 2, expA, expD });
     gainExp(s, p, expA);
     gainExp(s, dp, expD);
@@ -2316,15 +2337,6 @@ const Engine = (function () {
     const c = spawnChanceAt(s, Math.round(s.nextSpawnAt / MINUTE));
     for (const t of s.tiles) {
       if (t.owner === null && isObjective(t) && t.troops < tileCap(s, t) && rand(s) < c) { t.u.soldier++; t.troops++; }
-      else if (t.owner && t.type === 'forest') {
-        const p = s.players[t.owner], rank = p.skills.eco2;
-        if (rank && rand(s) < rank * s.cfg.skills.eco2.per) {
-          // Soldaten tillhör den by som har flest trupper i skogen (annars startbyn).
-          const homes = Object.keys(t.g || {});
-          const home = homes.length ? +homes.sort((a, b) => total(t.g[b]) - total(t.g[a]))[0] : p.village;
-          gAdd(t, home, U({ soldier: 1 }));
-        }
-      }
     }
   }
 
@@ -2374,7 +2386,7 @@ const Engine = (function () {
     const armyU = armyUnits(s, p), army = total(armyU);
 
     // 0. Färdighetspoäng
-    const plan = ['eco', 'atk', 'eco', 'atk', 'eco', 'atk', 'def', 'def', 'def', 'wire', 'def2', 'ret', 'ret', 'ret', 'eco2', 'eco2', 'eco2'];
+    const plan = ['eco', 'atk', 'eco', 'atk', 'eco', 'atk', 'def', 'def', 'def', 'wire', 'def2', 'ret', 'ret', 'ret'];
     while (p.points > 0) {
       const k = plan.find(x => !skillBlock(s, p, x));
       if (!k || !act({ type: 'skill', skill: k }).ok) break;
@@ -2520,10 +2532,11 @@ const Engine = (function () {
     if (!tw.start && canUp('wall') && B.wall < Math.floor(ageMin / 8)) invest.push(['wall', costOf('wall'), () => up('wall')]);
     if (prof.research && ageMin > 15 && tArmy >= 8 + ageMin * 0.25) {
       if (B.workshop < Math.min(cfg.buildings.workshop.max, Math.floor(ageMin / 18))) invest.push(['workshop', costOf('workshop'), () => up('workshop')]);
-      else if (!tw.researching) {
-        const kinds = RES_KINDS.filter(k => !UNIT_UP.includes(k) || canTrain(tw, k));
-        const kind = kinds.reduce((a, b) => researchLevel(tw, b) < researchLevel(tw, a) ? b : a);
-        const level = researchLevel(tw, kind) + 1;
+      else if (resQueueLen(tw) === 0) {
+        // Förbättringarna gäller alla byar: välj den sort som har lägst nivå (inklusive pågående).
+        const kinds = RES_KINDS.filter(k => !UNIT_UP.includes(k) || unitUnlocked(s, p, k));
+        const kind = kinds.reduce((a, b) => nextResearch(s, p, b) < nextResearch(s, p, a) ? b : a);
+        const level = nextResearch(s, p, kind);
         if (level <= B.workshop) invest.push(['research', researchCost(s, level), () => act(Object.assign({ type: 'research', kind }, t)).ok]);
       }
     }
@@ -2576,6 +2589,7 @@ const Engine = (function () {
     s.tiles.forEach((t, i) => {
       const enemyTown = t.type === 'village' && t.owner && t.owner !== p.id && attackableTown(s, i);
       if ((!isObjective(t) && !enemyTown) || t.owner === p.id || busy.has(i)) return;
+      if (t.type === 'forest' && t.troops === 0) return;            // tom skog: inget att hämta
       const enemy = t.owner !== null;
       if (enemy && min < prof.raidFrom) return;
       const owner = enemy ? s.players[t.owner] : null;
@@ -2598,7 +2612,8 @@ const Engine = (function () {
         const it = p.intel[i];
         value = 10 + Math.min(30, ((it ? (it.gold || 0) + (it.food || 0) : 120)) / 10);   // plundring
       } else {
-        value = t.type === 'monument' ? 60 : t.type === 'mine' ? (foodNet < 15 ? 10 : 16) : (foodNet < 15 ? 16 : 9);
+        // Skogar går inte att ta över; där finns bara guld och exp från de neutrala.
+        value = t.type === 'monument' ? 60 : t.type === 'mine' ? (foodNet < 15 ? 10 : 16) : 2 + total(dU);
         if (!enemy) value += total(dU) * cfg.killReward / 10 * 0.5;   // byte från neutrala
         if (enemy) {
           value += t.type === 'monument' ? 25 : 4;                     // ta ifrån fienden
@@ -2729,6 +2744,41 @@ const Engine = (function () {
       s.cfg.plunderFactor = CONFIG.plunderFactor;
       for (const k in s.towns) if (s.towns[k].buildings.wall == null) s.towns[k].buildings.wall = 0;
       s.v = 13;
+      return migrate(s);
+    }
+    if (s.v === 13) {
+      // 13 → 14: verkstadens förbättringar gäller alla byar (högsta nivån i någon by behålls) och kan köas.
+      // Skogar går inte längre att ta över: de blir neutrala och garnisonerna går hem. Skogsfolk betalas tillbaka.
+      s.cfg.researchQueueMax = CONFIG.researchQueueMax;
+      delete s.cfg.forestFoodBonus;
+      if (s.cfg.skills.eco2) delete s.cfg.skills.eco2;
+      for (const id of s.order) {
+        const p = s.players[id];
+        if (p.skills && p.skills.eco2) p.points += p.skills.eco2;
+        if (p.skills) delete p.skills.eco2;
+        const up = newUp(), towns = townsOf(s, p);
+        for (const tw of towns) {
+          for (const k of ['attack', 'defense']) up[k] = Math.max(up[k], (tw.research && tw.research[k]) || 0);
+          for (const k of UNIT_UP) up[k] = Math.max(up[k], (tw.unitUp && tw.unitUp[k]) || 0);
+        }
+        p.up = up;
+        const pend = {};
+        for (const tw of towns) {
+          tw.rq = [];
+          delete tw.research; delete tw.unitUp;
+          const r = tw.researching;
+          if (r) { pend[r.kind] = (pend[r.kind] || 0) + 1; r.level = up[r.kind] + pend[r.kind]; }
+        }
+      }
+      s.tiles.forEach((t, i) => {
+        if (t.type !== 'forest') return;
+        for (const id of s.order) delete s.players[id].intel[i];
+        if (!t.owner) return;
+        const p = s.players[t.owner];
+        if (p && t.troops > 0) recallTile(s, p, i, false);
+        t.owner = null; gClear(t);
+      });
+      s.v = 14;
       return s;
     }
     if (s.v !== 6) return s;
@@ -2743,7 +2793,7 @@ const Engine = (function () {
     return migrate(s);
   }
   function isValidSave(s) {
-    return !!(s && s.v >= 6 && s.v <= 13 && s.cfg && Array.isArray(s.tiles) && s.towns && s.players && s.order && s.tiles.length === s.cfg.mapSize * s.cfg.mapSize);
+    return !!(s && s.v >= 6 && s.v <= 14 && s.cfg && Array.isArray(s.tiles) && s.towns && s.players && s.order && s.tiles.length === s.cfg.mapSize * s.cfg.mapSize);
   }
 
   // =====================================================================
@@ -2798,7 +2848,7 @@ const Engine = (function () {
   }
   function decodeView(init, v, prevLog) {
     const cfg = init.cfg, N = cfg.mapSize;
-    const s = { v: 13, cfg, seed: init.seed, rng: 0, time: v.t, nextSpawnAt: v.ns, tiles: [], towns: {}, players: {}, order: v.ord.slice(),
+    const s = { v: 14, cfg, seed: init.seed, rng: 0, time: v.t, nextSpawnAt: v.ns, tiles: [], towns: {}, players: {}, order: v.ord.slice(),
       armies: v.ar, caravans: v.cv, log: [], nextId: v.nid, winner: v.w, endedAt: v.e, online: true, view: true };
     for (let i = 0; i < N * N; i++) s.tiles.push({ x: i % N, y: Math.floor(i / N), type: CODE_TYPE[v.ty[i]], owner: null, u: U(), troops: 0, g: {}, look: init.look[i] });
     for (const r of v.tl) {
@@ -2833,7 +2883,7 @@ const Engine = (function () {
     upgradeCost, goldCap, foodCap, prodAtLevel, foodAtLevel, mineBonus, goldPerHour, foodProdPerHour,
     expToNext, skillBlock, treePoints, sendSpeed, wireBonus, returnSpeed,
     upkeepPerHour, soldierCount, trainMs, canTrain, vpPerMinute, vp,
-    researchCost, researchMs, researchLevel, attackMult, defenseMult, attackVec, defenseVec, garrisonDefVec, unitBonus, UNIT_UP, RES_KINDS,
+    researchCost, researchMs, researchLevel, researchPending, nextResearch, resQueueLen, unitUnlocked, capturable, attackMult, defenseMult, attackVec, defenseVec, garrisonDefVec, unitBonus, UNIT_UP, RES_KINDS,
     spawnChanceAt, nextSpawnChance, countOwned,
   };
 })();
@@ -3589,7 +3639,43 @@ window.GP_EN = {
 "Mur nivå ": "Wall level ",
 "Startbyn kan inte ha någon mur.": "The starting village cannot have a wall.",
 "<b>Mur</b>: i byar som inte är startbyar kan du bygga en mur. Varje nivå ger byns försvarare +": "<b>Wall</b>: in villages other than your starting village you can build a wall. Each level gives the village defenders +",
-" % i försvar när byn anfalls. Muren syns för andra spelare.": " % defence when the village is attacked. Other players can see the wall."
+" % i försvar när byn anfalls. Muren syns för andra spelare.": " % defence when the village is attacked. Other players can see the wall.",
+" exp per soldat": " exp per soldier",
+"<p class=\"empty\">Du har inga objektiv än. Guldgruvor nära byn har bara en försvarare i början.</p>": "<p class=\"empty\">You have no objectives yet. Gold mines near the village have only one defender at the start.</p>",
+"Skogar går inte att ta över. Döda de neutrala soldaterna för guld och exp; de överlevande går sedan hem.": "Forests cannot be captured. Kill the neutral soldiers for gold and exp; the survivors then head home.",
+"Tom": "Empty",
+"Ingen står i skogen just nu, och skogar går inte att ta över.": "Nobody is in the forest right now, and forests cannot be captured.",
+"Rensas": "Cleared",
+": dess potatisland föder dem.": ": its potato field feeds them.",
+"<span><b>Kan anfallas.</b> Trupperna hemma försvarar byn, och vinner fienden tar de med sig guld och mat. Utvandrare försvarar inte.</span>": "<span><b>Can be attacked.</b> The troops at home defend the village, and if the enemy wins they carry off gold and food. Settlers do not defend.</span>",
+"Trupperna flyttar in och tillhör sedan den byn.": "The troops move in and then belong to that village.",
+" och tillhör sedan den byn: dess potatisland föder dem.": " and then belong to that village: its potato field feeds them.",
+"<p class=\"info\" id=\"resNone\">Bygg verkstaden för att förbättra anfall och försvar för alla trupper, eller både anfall och försvar för en trupptyp i taget. Förbättringarna gäller alla dina byar och kan läggas i kö. Varje nivå ger +": "<p class=\"info\" id=\"resNone\">Build the workshop to improve attack and defence for all troops, or both attack and defence for one troop type at a time. The upgrades apply to all your villages and can be queued. Each level gives +",
+" i alla byar": " in all villages",
+"Allt i kö": "All queued",
+"Köa nivå ": "Queue level ",
+"Kön är full": "The queue is full",
+" · i kö: ": " · queued: ",
+" · allt klart om ": " · all done in ",
+"Pågår också: ": "Also in progress: ",
+"Scouter": "Scouts",
+"Hemma i ": "At home in ",
+"Hemma": "At home",
+" ute": " out",
+"Ingen stod i skogen ": "Nobody was in the forest ",
+". Skogar går inte att ta över, så trupperna går hem.": ". Forests cannot be captured, so the troops head home.",
+"Rensat": "Cleared",
+"Skogen är rensad men går inte att ta över. ": "The forest is cleared but cannot be captured. ",
+" Kvar på rutan: ": " Left on the tile: ",
+"Varje trupp tillhör en by och äter av dess mat. Flyttar du trupper till en annan av dina byar tillhör de sedan den byn. Erfarenhet, nivåer, färdigheter och verkstadens förbättringar gäller alla dina byar.": "Every troop belongs to a village and eats its food. If you move troops to another of your villages, they then belong to that village. Experience, levels, skills and workshop upgrades apply to all your villages.",
+" % guld (i alla dina byar) och monument <b>": " % gold (in all your villages) and monuments <b>",
+" vinstpoäng per minut</b>. Skogar går inte att ta över, men där dyker neutrala soldater upp som du kan döda för guld och exp.": " victory points per minute</b>. Forests cannot be captured, but neutral soldiers appear there that you can kill for gold and exp.",
+"<b>Dimma</b>: du ser inte hur många som står på en annan spelares ruta eller i deras byar, eller hur stora andras arméer är, bara att de rör sig. Du får veta genom spaning, när dina trupper överlever en strid där, eller när ditt anfall dödar minst två försvarare. Kartan visar då det senast kända antalet med ett frågetecken, till exempel 4?.": "<b>Fog</b>: you cannot see how many are stationed on another player's tile or in their villages, or how big other armies are, only that they are moving. You find out by scouting, when your troops survive a battle there, or when your attack kills at least two defenders. The map then shows the last known number with a question mark, for example 4?.",
+"I <b>verkstaden</b> förbättrar du anfall och försvar för alla dina trupper med +": "In the <b>workshop</b> you improve attack and defence for all your troops by +",
+" % per nivå, eller både anfall och försvar för en trupptyp i taget (soldat, berserker, sköldgrabb). Förbättringarna gäller alla dina byar. Varje sak kan förbättras upp till nivån på verkstaden där du gör det, varje verkstad har en kö på ": " % per level, or both attack and defence for one troop type at a time (soldier, berserker, shieldbearer). The upgrades apply to all your villages. Each can be improved up to the level of the workshop where you do it, each workshop has a queue of ",
+" förbättringar, och varje verkstadsnivå gör arbetet ": " upgrades, and each workshop level makes the work ",
+"Dödar du alla försvarare på en guldgruva eller ett monument blir rutan din. <b>Efter en strid går de överlevande alltid hem</b>, så en erövrad ruta står tom tills du förstärker den. Skicka gärna förstärkning direkt efter anfallet; kommer den fram efter striden förstärker den rutan. Varje neutral soldat du dödar ger <b>": "If you kill all defenders on a gold mine or a monument, the tile becomes yours. <b>After a battle the survivors always head home</b>, so a captured tile stands empty until you reinforce it. Feel free to send reinforcements right after the attack; if they arrive after the battle they reinforce the tile. Each neutral soldier you kill gives <b>",
+"Verkstadens kö är full.": "The workshop queue is full."
 };
 window.GP_EN_BODY = {
 "Nivå och erfarenhet": "Level and experience",
@@ -3670,7 +3756,9 @@ window.GP_EN_BODY = {
 "Starta spelet": "Start the game",
 "Frånkopplad": "Disconnected",
 "Till startskärmen": "To the start screen",
-"Återanslut": "Reconnect"
+"Återanslut": "Reconnect",
+"Välj by": "Choose village",
+"Hemma": "At home"
 };
 window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires research centre level $1."], ["^Kräver verkstad nivå (\\d+)\\.$", "Requires workshop level $1."], ["^Kräver (\\d+) poäng i samma träd först\\.$", "Requires $1 points in the same tree first."]];
 </script>
@@ -3722,7 +3810,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   const NET = { role: null, view: null, lobby: null, hostH: null, link: null, room: null, init: null, list: [], unwatch: null,
     tr: null, pending: 0, pendingAt: 0, reqId: 0, lastSend: 0, on: {}, chosenSpeed: 1, lobbyId: null, joining: false, ended: false, leaving: false };
   const BEST_KEY = 'guld-och-potatis:best:v1';
-  const STAY_KEY = 'guld-och-potatis:stay:v1';
   const TRAIN_KEY = 'guld-och-potatis:train:v1';   // senast valda antal att träna
   const MIN = 60000;
   const NUMFONT = '"Barlow Condensed", "Arial Narrow", sans-serif';
@@ -3765,7 +3852,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   function gives(t) {
     const c = S.cfg;
     if (t.type === 'mine') return '+' + Math.round(c.goldMineGoldBonus * 100) + TR(' % guld');
-    if (t.type === 'forest') return '+' + Math.round(c.forestFoodBonus * 100) + TR(' % mat');
+    if (t.type === 'forest') return c.killReward + TR(' guld och ') + c.expPerNeutralKill + TR(' exp per soldat');
     if (t.type === 'monument') return c.vpPerMonumentPerMinute + TR(' vinstpoäng/min');
     return '';
   }
@@ -3814,11 +3901,11 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   let acc = 0;
   let paused = false, menuOpen = false, running = false, winShown = false;
   let lastReal = performance.now(), lastUi = 0, lastSave = 0;
-  let toastSeen = 0, reportSeen = 0;
+  let reportSeen = 0;
   // town = byn som visas under Byn och i HUD:en, sendFrom = byn trupperna skickas från i rutpanelen.
   const ui = { tab: 'village', side: 'village', sel: -1, sendU: null, trainN: Math.max(1, Math.floor(store.get(TRAIN_KEY) || 1)), trainKs: {}, move: { to: -1, u: null }, moveOpen: false, rowSig: '', sheetSig: '', troopsSig: '', reportsSig: '', desk: false, chosenSpeed: 1, chosenRival: 'normal', confirmRecall: false, town: -1, sendFrom: -1, townSigs: {}, fwd: null, fwdSig: '', standSig: '' };
   let incomingSeen = new Set();
-  ui.stay = store.get(STAY_KEY) === true;
+  ui.stay = false;   // "stanna och försvara" gäller bara nästa anfall
   const me = () => S.players[ME];
   const myTowns = () => E.townsOf(S, me());
   const multi = () => me().towns.length > 1;
@@ -3875,10 +3962,9 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   }
 
   // Alla handlingar går hit. Multiplayer: skicka action till värden i stället.
-  function dispatch(action, quiet) {
-    if (NET.role === 'guest') return guestDispatch(action, quiet);
+  function dispatch(action) {
+    if (NET.role === 'guest') return guestDispatch(action);
     const r = E.apply(S, Object.assign({ player: ME }, action));
-    if (!r.ok && !quiet) toast(TE(r.error), 'bad');
     refresh(true);
     save();
     return r;
@@ -4072,7 +4158,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   function fogLabel(st, t, idx, viewer) {
     if (!viewer || !t.owner || t.owner === viewer) return null;
     const it = st.players[viewer] && st.players[viewer].intel[idx];
-    return it ? '~' + it.total : '?';
+    return it ? it.total + '?' : '?';   // senast kända antal
   }
   // Liten utsnittsbild av en karta (startskärm och segerskärm). viewer = dölj andras trupper.
   function drawPreview(canvas, st, focusIdx, viewer) {
@@ -4453,14 +4539,15 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   function researchHTML() {
     const bonus = Math.round(S.cfg.researchBonusPerLevel * 100);
     const row = (kind, name) =>
-      '<div class="res-row"><div class="res-txt"><div class="name">' + (UNITS[kind] ? icon(UNITS[kind].icon, 'uic') : '') + name + '<span class="lvl" id="res-' + kind + '-lvl"></span></div><small id="res-' + kind + '-eff"></small></div>' +
+      '<div class="res-row"><div class="res-txt"><div class="name"><span class="nm">' + (UNITS[kind] ? icon(UNITS[kind].icon, 'uic') : '') + name + '</span><span class="lvl" id="res-' + kind + '-lvl"></span></div><small id="res-' + kind + '-eff"></small></div>' +
       '<div class="up-wrap"><button class="btn" type="button" data-act="research" data-kind="' + kind + '" id="res-' + kind + '-btn"><span id="res-' + kind + '-txt"></span><span class="cost" id="res-' + kind + '-cost">' + goldIcon + '<span></span></span></button>' +
       '<span class="up-when" id="res-' + kind + '-when"></span></div></div>';
     return '<div class="train" id="research">' +
-      TR('<p class="info" id="resNone">Bygg verkstaden för att förbättra anfall och försvar för alla trupper, eller både anfall och försvar för en trupptyp i taget. Varje nivå ger +') + bonus + TR(' %, verkstadens nivå avgör hur långt du kan gå och varje verkstadsnivå gör arbetet ') + Math.round((1 - S.cfg.workshopSpeedFactor) * 100) + TR(' % snabbare.</p>') +
+      TR('<p class="info" id="resNone">Bygg verkstaden för att förbättra anfall och försvar för alla trupper, eller både anfall och försvar för en trupptyp i taget. Förbättringarna gäller alla dina byar och kan läggas i kö. Varje nivå ger +') + bonus + TR(' %, verkstadens nivå avgör hur långt du kan gå och varje verkstadsnivå gör arbetet ') + Math.round((1 - S.cfg.workshopSpeedFactor) * 100) + TR(' % snabbare.</p>') +
       '<div class="stack" id="resBox">' + row('attack', TR('Anfall')) + row('defense', TR('Försvar')) +
         TR('<h4 class="eyebrow res-sub">Trupptyper</h4>') + row('soldier', TR('Soldater')) + row('berserker', TR('Berserkers')) + row('shield', TR('Sköldgrabbar')) +
         '<div class="queue" id="resQueue" hidden><div class="meter"><i id="resBar"></i></div><span id="resQText"></span></div>' +
+        '<p class="hint" id="resElse" hidden></p>' +
       '</div></div>';
   }
   const rows = {};
@@ -4634,7 +4721,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     $('mvEvery').hidden = all < 1; setText($('mvEvery').querySelector('b'), String(all));
     const n = E.total(ui.move.u), dest = S.towns[ui.move.to];
     $('moveInfo').innerHTML = TR('Framme om <b>') + dur(E.travelMs(S, tw.idx, dest.idx)) + '</b> (' + rutor(E.dist(S.tiles[tw.idx], S.tiles[dest.idx])) + '). ' +
-      TR('Trupperna tillhör sedan ') + esc(dest.name) + TR(': dess verkstad ger bonus och dess potatisland föder dem.');
+      TR('Trupperna tillhör sedan ') + esc(dest.name) + TR(': dess potatisland föder dem.');
     $('moveBtn').disabled = n < 1;
     setText($('moveBtn'), n < 1 ? TR('Välj trupper') : TR('Flytta ') + unitShort(ui.move.u));
   }
@@ -4644,7 +4731,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     setText($('vname'), tw.name);
     setText($('vcoord'), coord(S.tiles[tw.idx]));
     const note = tw.start ? icon('k-defense', 'ic') + TR('<span><b>Skyddad startby.</b> Den kan inte anfallas. Byar du grundar senare kan anfallas och plundras.</span>') :
-      icon('t-village', 'ic') + TR('<span><b>Kan anfallas.</b> Trupperna hemma försvarar byn med byns verkstadsbonus, och vinner fienden tar de med sig guld och mat. Utvandrare försvarar inte.</span>');
+      icon('t-village', 'ic') + TR('<span><b>Kan anfallas.</b> Trupperna hemma försvarar byn, och vinner fienden tar de med sig guld och mat. Utvandrare försvarar inte.</span>');
     if (ui.vnoteSig !== note) { ui.vnoteSig = note; $('vnote').innerHTML = note; }
     $('vnote').hidden = false;
     $('vnote').classList.toggle('open', !tw.start);
@@ -4661,7 +4748,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       f.eff.innerHTML = '<b>' + effect(b.key, L) + '</b>' + (max ? '' : ' → ' + esc(effectNext(b.key, L + 1)));
       let note = '';
       if (b.key === 'goldmine') { const n = E.countOwned(S, ME, 'mine'); if (n) note = '+' + Math.round(n * E.mineBonus(S, p) * 100) + TR(' % från ') + n + ' ' + plural(n, TR('erövrad guldgruva'), TR('erövrade guldgruvor')); }
-      if (b.key === 'farm') { const n = E.countOwned(S, ME, 'forest'); if (n) note = '+' + Math.round(n * c.forestFoodBonus * 100) + TR(' % från ') + n + ' ' + plural(n, TR('erövrad skog'), TR('erövrade skogar')); }
       f.note.hidden = !note; setText(f.note, note);
       if (max) {
         setText(f.btxt, TR('Högsta nivå')); f.cost.hidden = true; f.btn.disabled = true; setText(f.when, '');
@@ -4680,6 +4766,22 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     updateLab(tw);
   }
 
+  // Överst under Trupper: hur många av varje trupptyp den valda byn har hemma (och ute).
+  const PLUR = { soldier: TR('Soldater'), berserker: TR('Berserkers'), shield: TR('Sköldgrabbar'), scout: TR('Scouter'), settler: LX('Utvandrare', 'Settlers') };
+  function renderHomeUnits(tw) {
+    const all = E.townUnits(S, tw), q = E.U();
+    tw.tq.forEach(b => { q[b.k] += b.n; });
+    const ks = KEYS.filter(k => k === 'soldier' || all[k] > 0 || q[k] > 0 || (k !== 'settler' && E.canTrain(tw, k)));
+    const sig = tw.idx + '|' + multi() + '|' + ks.map(k => k + ':' + tw.hu[k] + ':' + all[k] + ':' + q[k]).join(',');
+    if (sig === ui.homeSig) return;
+    ui.homeSig = sig;
+    setText($('homeHead'), multi() ? TR('Hemma i ') + tw.name : TR('Hemma'));
+    $('homeUnits').innerHTML = ks.map(k => {
+      const away = all[k] - tw.hu[k];
+      const sub = [away > 0 ? '+' + away + TR(' ute') : '', q[k] ? '+' + q[k] + TR(' i kö') : ''].filter(Boolean).join(' · ');
+      return '<div class="ucell">' + icon(UNITS[k].icon, 'uic') + '<b>' + fmt(tw.hu[k]) + '</b><span>' + PLUR[k] + '</span>' + (sub ? '<small>' + sub + '</small>' : '') + '</div>';
+    }).join('');
+  }
   function updateTraining(tw) {
     const c = S.cfg;
     const hasB = tw.buildings.barracks > 0;
@@ -4761,30 +4863,31 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   const KIND = { attack: TR('Anfall'), defense: TR('Försvar'), soldier: TR('Soldater'), berserker: TR('Berserkers'), shield: TR('Sköldgrabbar') };
   const isUnitKind = k => E.UNIT_UP.includes(k);
   const resDone = (k, L) => '+' + Math.round(L * S.cfg.researchBonusPerLevel * 100) + ' %' + (isUnitKind(k) ? TR(' anfall och försvar') : '');
+  // Förbättringarna gäller alla byar (nivån ligger på spelaren). Varje verkstad har en egen kö.
   function updateResearch(tw) {
-    const c = S.cfg, W = tw.buildings.workshop;
+    const c = S.cfg, W = tw.buildings.workshop, p = me();
     $('resNone').hidden = W > 0; $('resBox').hidden = W === 0;
     if (W === 0) return;
     const gph = E.goldPerHour(S, tw);
+    const busy = !!tw.researching, full = E.resQueueLen(tw) >= (c.researchQueueMax || 1);
     for (const kind of E.RES_KINDS) {
-      const L = E.researchLevel(tw, kind), next = L + 1, unit = isUnitKind(kind), locked = unit && !E.canTrain(tw, kind);
-      setText($('res-' + kind + '-lvl'), TR('Nivå ') + L);
+      const L = E.researchLevel(p, kind), pend = E.researchPending(S, p, kind), next = L + pend + 1;
+      const unit = isUnitKind(kind), locked = unit && !E.unitUnlocked(S, p, kind);
+      setText($('res-' + kind + '-lvl'), TR('Nivå ') + L + (pend ? ' (+' + pend + ')' : ''));
       setText($('res-' + kind + '-eff'), '+' + Math.round(L * c.researchBonusPerLevel * 100) + ' % ' +
-        (unit ? TR('anfall och försvar för ') + UNITS[kind].many : (kind === 'attack' ? TR('anfallskraft') : TR('försvarskraft')) + (multi() ? TR(' för byns trupper') : '')));
+        (unit ? TR('anfall och försvar för ') + UNITS[kind].many : (kind === 'attack' ? TR('anfallskraft') : TR('försvarskraft'))) + (multi() ? TR(' i alla byar') : ''));
       const btn = $('res-' + kind + '-btn'), costEl = $('res-' + kind + '-cost');
-      const max = next > c.buildings.workshop.max;
       let when = '';
-      if (max) {
-        setText($('res-' + kind + '-txt'), TR('Högsta nivå')); costEl.hidden = true; btn.disabled = true;
+      if (next > c.buildings.workshop.max) {
+        setText($('res-' + kind + '-txt'), L >= c.buildings.workshop.max ? TR('Högsta nivå') : TR('Allt i kö')); costEl.hidden = true; btn.disabled = true;
       } else {
         const cost = E.researchCost(S, next);
-        setText($('res-' + kind + '-txt'), TR('Nivå ') + next + ' · ' + dur(E.researchMs(S, next, tw)));
+        setText($('res-' + kind + '-txt'), (busy ? TR('Köa nivå ') : TR('Nivå ')) + next + ' · ' + dur(E.researchMs(S, next, tw)));
         costEl.hidden = false; setText(costEl.querySelector('span'), fmt(cost));
-        btn.disabled = locked || !!tw.researching || next > W || tw.gold < cost;
-        if (tw.researching && tw.researching.kind === kind) when = TR('Pågår');
-        else if (locked) when = TR('Lås upp i forskningscentret först');
+        btn.disabled = locked || full || next > W || tw.gold < cost;
+        if (locked) when = TR('Lås upp i forskningscentret först');
         else if (next > W) when = TR('Kräver verkstad nivå ') + next;
-        else if (tw.researching) when = TR('Verkstaden är upptagen');
+        else if (full) when = TR('Kön är full');
         else if (tw.gold < cost) when = cost > E.goldCap(S, tw) ? TR('Kräver större skattkammare') : TR('Råd om ') + dur((cost - tw.gold) / gph * E.HOUR);
       }
       setText($('res-' + kind + '-when'), when);
@@ -4793,8 +4896,16 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     $('resQueue').hidden = !r;
     if (r) {
       $('resBar').style.width = (100 * clamp((S.time - r.start) / (r.done - r.start), 0, 1)).toFixed(1) + '%';
-      setText($('resQText'), KIND[r.kind] + TR(' nivå ') + r.level + TR(' · klar om ') + dur(r.done - S.time));
+      const rq = tw.rq || [];
+      const allMs = rq.reduce((ms, q) => ms + E.researchMs(S, q.level, tw), r.done - S.time);
+      setText($('resQText'), KIND[r.kind] + TR(' nivå ') + r.level + TR(' · klar om ') + dur(r.done - S.time) +
+        (rq.length ? TR(' · i kö: ') + rq.map(q => KIND[q.kind].toLowerCase() + ' ' + q.level).join(', ') + TR(' · allt klart om ') + dur(allMs) : ''));
     }
+    // Förbättringar som pågår i dina andra byars verkstäder.
+    const others = myTowns().filter(x => x !== tw && x.researching);
+    $('resElse').hidden = !others.length;
+    if (others.length) setText($('resElse'), TR('Pågår också: ') + others.map(x => KIND[x.researching.kind].toLowerCase() + TR(' nivå ') + x.researching.level + TR(' i ') + x.name +
+      ((x.rq || []).length ? ' (+' + x.rq.length + TR(' i kö') + ')' : '')).join(' · '));
   }
   // =====================================================================
   //   HUD
@@ -4994,6 +5105,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       ui.sendFrom = defaultFrom(ui.sel);
       let html = sheetHead(t);
       if (E.isObjective(t)) {
+        if (t.type === 'forest') html += '<p class="lede">' + TR('Skogar går inte att ta över. Döda de neutrala soldaterna för guld och exp; de överlevande går sedan hem.') + '</p>';
         html += '<dl class="facts">' +
           '<div><dt>' + (t.owner === ME ? TR('Din garnison') : TR('Försvarare')) + '</dt><dd id="sh-def"></dd></div>' +
           TR('<div><dt>Ger</dt><dd>') + gives(t) + (t.owner === ME ? TR(' <span class="muted">(aktivt)</span>') : '') + '</dd></div>' +
@@ -5098,9 +5210,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   function fwdSet(k, v) { if (ui.fwd) ui.fwd.u[k] = clamp(v, 0, S.tiles[ui.fwd.from].u[k] || 0); }
   function pickFwd(idx) {
     const f = ui.fwd, t = S.tiles[idx];
-    if (idx === f.from) { toast(TR('Välj ett annat av dina objektiv.')); return; }
+    if (idx === f.from) return;
     if (t.owner === ME && (E.isObjective(t) || t.type === 'village')) { f.to = idx; renderSheet(); return; }
-    toast(TR('Trupper kan bara sändas vidare till dina egna objektiv och byar. För att anfalla, skicka trupper från en by.'), 'bad');
   }
   function updateFwd() {
     const f = ui.fwd;
@@ -5108,7 +5219,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     const from = S.tiles[f.from];
     if (from.owner !== ME || from.troops < 1) {
       ui.fwd = null; ui.sheetSig = '';
-      toast(from.owner !== ME ? TR('Rutan är inte din längre.') : TR('Inga trupper står kvar där.'), 'bad');
       renderSheet();
       return;
     }
@@ -5152,7 +5262,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     else if (S.tiles[f.to].type === 'village') {
       const tw = S.towns[f.to];
       info = TR('Mål: <b>') + esc(tw.name) + ' ' + coord(S.tiles[f.to]) + TR('</b> (din by). Framme om <b>') + dur(E.travelMs(S, f.from, f.to)) + '</b> (' + rutor(E.dist(from, S.tiles[f.to])) + '). ' +
-        TR('Trupperna flyttar in och tillhör sedan den byn, med dess verkstadsbonus.');
+        TR('Trupperna flyttar in och tillhör sedan den byn.');
     } else {
       const t = S.tiles[f.to], spd = E.sendSpeed(S, me(), f.to);
       info = TR('Mål: <b>') + esc(TYPES[t.type].name) + ' ' + coord(t) + TR('</b>, där ') + (t.troops ? trupper(t.troops) + TR(' står') : TR('ingen står')) + TR('. Framme om <b>') + dur(E.travelMs(S, f.from, f.to) / spd) + '</b> (' + rutor(E.dist(from, t)) + ')' + (spd > 1 ? TR(', snabb förstärkning') : '') +
@@ -5180,7 +5290,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   }
   // Rader med en stegräknare per trupptyp som finns hemma i avsändarbyn (utvandrare går för sig).
   document.addEventListener('change', e => {
-    if (e.target && e.target.id === 'stayChk') { ui.stay = e.target.checked; store.set(STAY_KEY, ui.stay); updateSheet(); }
+    if (e.target && e.target.id === 'stayChk') { ui.stay = e.target.checked; updateSheet(); }
   });
   function renderUnitRows(src) {
     const ks = KEYS.filter(k => k !== 'settler' && (src.hu[k] > 0 || ui.sendU[k] > 0));
@@ -5267,7 +5377,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
           def += '<br><span class="muted">' + homes.map(h => esc(townName(+h)) + ' ' + E.total(t.g[h])).join(' · ') + '</span>';
       }
       else if (!rivalTile) def = '<b>' + t.troops + '</b><span class="muted">/' + capOf(t) + TR('</span> neutrala');
-      else if (n.info) def = '<b>~' + n.info.total + '</b> <span class="muted">' + ago(n.info.t) + '</span><br><span class="muted">' + unitList(n.info.u, TR('inga')) + '</span>';
+      else if (n.info) def = '<b>' + n.info.total + '?</b> <span class="muted">' + ago(n.info.t) + '</span><br><span class="muted">' + unitList(n.info.u, TR('inga')) + '</span>';
       else def = TR('<b>Okänt</b>');
       if (rivalTile && n.dFlat) def += TR('<br><span class="muted">Taggtråd: +') + n.dFlat + TR(' i försvar</span>');
       if (rivalTile && isTown && here && here.buildings.wall) def += '<br><span class="muted">' + TR('Mur nivå ') + here.buildings.wall + ' (+' + Math.round(E.wallBonus(S, here) * 100) + ' %)</span>';
@@ -5305,7 +5415,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     showChip('chipClear', sel > 0);
     const stayRow = $('stayRow');
     if (stayRow) {
-      stayRow.hidden = !(E.isObjective(t) && !mineTile);
+      stayRow.hidden = !(E.capturable(t) && !mineTile);
       if (!stayRow.hidden && $('stayChk').checked !== ui.stay) $('stayChk').checked = ui.stay;
     }
     $('sh-fc').innerHTML = forecast(t, ui.sendU, n);
@@ -5334,7 +5444,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     const A = E.total(sel);
     if (A < 1) return TR('Välj vilka trupper som ska gå.');
     const isTown = t.type === 'village';
-    if (isTown && t.owner === ME) return unitList(sel) + TR(' flyttar till ') + esc(townName(ui.sel)) + TR(' och tillhör sedan den byn: dess verkstad ger bonus och dess potatisland föder dem.');
+    if (isTown && t.owner === ME) return unitList(sel) + TR(' flyttar till ') + esc(townName(ui.sel)) + TR(' och tillhör sedan den byn: dess potatisland föder dem.');
     if (t.owner === ME) return unitList(sel) + TR(' förstärker garnisonen.') + (multi() ? TR(' De tillhör fortfarande ') + esc(n.src.name) + '.' : '');
     const rivalTile = !!t.owner;
     if (E.onlyScouts(sel)) {
@@ -5363,6 +5473,12 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         } else loot = trupper(surv) + TR(' kan bära hem ') + cap + TR(' guld och mat. Spana för att se förrådet.');
       }
       return '<span class="verdict ' + (win ? 'ok' : 'no') + '">' + (win ? TR('Plundras') : TR('Räcker inte')) + '</span>' + src + fight + loot + later + mixNote;
+    }
+    if (t.type === 'forest') {
+      // Skogen går inte att ta över: anfallet ger bara guld och exp.
+      if (D === 0) return '<span class="verdict unk">' + TR('Tom') + '</span>' + src + TR('Ingen står i skogen just nu, och skogar går inte att ta över.') + later + mixNote;
+      return '<span class="verdict ' + (win ? 'ok' : 'no') + '">' + (win ? TR('Rensas') : TR('Räcker inte')) + '</span>' + src + fight +
+        '(+' + r.dLoss * S.cfg.killReward + TR(' guld.) ') + (surv > 0 ? trupper(surv) + TR(' går hem igen.') : TR('Ingen överlever.')) + later + mixNote;
     }
     const stays = k => S.cfg.stayAfterCapture || ui.stay ? trupper(k) + TR(' stannar och försvarar rutan.') : TR('Rutan blir din och ') + trupper(k) + TR(' går hem igen. Kryssa i rutan ovan om de ska stanna och försvara den.');
     if (D === 0 && !n.dFlat) return TR('<span class="verdict ok">Erövras</span>') + src + fight + stays(A) + later + mixNote;
@@ -5428,12 +5544,11 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   $('renameForm').addEventListener('submit', e => {
     e.preventDefault();
     const tw = S.towns[ui.renameIdx], old = tw ? tw.name : '';
-    const r = dispatch({ type: 'rename', town: ui.renameIdx, name: $('renameInput').value }, true);
+    const r = dispatch({ type: 'rename', town: ui.renameIdx, name: $('renameInput').value });
     if (!r.ok) { $('renameErr').hidden = false; setText($('renameErr'), TE(r.error)); return; }
     closeRename();
     ui.sheetSig = ''; ui.troopsSig = ''; ui.reportsSig = '';
     refresh(true);
-    if (old !== tw.name) toast(old + TR(' heter nu ') + tw.name + '.', 'good');
   });
   $('ov-rename').addEventListener('click', e => { if (e.target === e.currentTarget) closeRename(); });
   // Ställningen öppnas från vinstpoängen i HUD:en och uppdateras medan den är öppen.
@@ -5518,7 +5633,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         }).join('') + '</div>';
       }
       html += TR('</div><div class="stack"><h3 class="eyebrow">Dina objektiv</h3>');
-      if (!owned.length) html += TR('<p class="empty">Du har inga objektiv än. Guldgruvor och skogar nära byn har bara en försvarare i början.</p>');
+      if (!owned.length) html += TR('<p class="empty">Du har inga objektiv än. Guldgruvor nära byn har bara en försvarare i början.</p>');
       else {
         const order = { monument: 0, mine: 1, forest: 2 };
         html += '<div class="list">' + owned.sort((a, b) => order[a[0].type] - order[b[0].type]).map(([t, i]) =>
@@ -5554,7 +5669,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     def:  { name: TR('Försvarskraft'), desc: (c, r) => TR('Försvarspoäng ') + (r ? '<b>+' + pctS(c.per * r) + '</b>' : '+0 %') + (r < c.max ? ' → +' + pctS(c.per * (r + 1)) : '') + '.' },
     def2: { name: TR('Snabb förstärkning'), desc: c => TR('Trupper går ') + pctS(c.per - 1) + TR(' snabbare när de förstärker ett av dina objektiv.') },
     eco:  { name: TR('Rikare gruvor'), desc: (c, r) => TR('Varje guldgruva du kontrollerar ger ') + (r ? '<b>+' + pctS(c.per * r) + '</b>' : '+0 %') + (r < c.max ? ' → +' + pctS(c.per * (r + 1)) : '') + TR(' guld utöver de vanliga ') + pctS(S.cfg.goldMineGoldBonus) + '.' },
-    eco2: { name: TR('Skogsfolk'), desc: (c, r) => TR('Varje skog du kontrollerar får en soldat med ') + (r ? '<b>' + pctS(c.per * r) + '</b>' : '0 %') + (r < c.max ? ' → ' + pctS(c.per * (r + 1)) : '') + TR(' chans varje minut.') },
   };
   ui.skillsSig = '';
   function renderSkills(force) {
@@ -5675,14 +5789,15 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       const mineAtk = e.player === ME, mineDef = e.defender === ME;
       const aU = e.aU || E.U({ soldier: e.A }), dU = e.dU || E.U({ soldier: e.D });
       if (!mineAtk && !mineDef) return small(who(e.player) + TR(' tog ') + name + (e.defender ? TR(' från ') + who(e.defender) : '') + '.', 'alert');
+      if (e.D === 0 && e.cleared) return small(TR('Ingen stod i skogen ') + coord(t) + TR('. Skogar går inte att ta över, så trupperna går hem.'));
       if (e.D === 0) {
         if (mineAtk) return TR('<article class="rep won"><div class="rep-head"><span class="rep-kind">Utan strid</span>') + tclock + '</div>' + link +
           TR('<p>Ingen försvarade rutan. Den är din. ') + capturedTxt(e.stay || 0, e.A - (e.stay || 0)) + '</p></article>';
         return TR('<article class="rep lost"><div class="rep-head"><span class="rep-kind">Förlorad</span>') + tclock + '</div>' + link +
           TR('<p>Rutan stod tom. ') + esc(who(e.player)) + TR(' tog den med ') + unitList(aU) + (e.stay ? '.' : TR(', som sedan gick hem.')) + '</p></article>';
       }
-      const won = mineAtk ? e.captured : !e.captured;
-      const kind = mineAtk ? (e.captured ? TR('Erövrat') : TR('Avvärjt')) : (e.captured ? TR('Förlorad') : TR('Försvarat'));
+      const won = mineAtk ? e.captured || !!e.cleared : !e.captured;
+      const kind = mineAtk ? (e.captured ? TR('Erövrat') : e.cleared ? TR('Rensat') : TR('Avvärjt')) : (e.captured ? TR('Förlorad') : TR('Försvarat'));
       const atkLabel = mineAtk ? TR('Ditt anfall') : esc(who(e.player)) + TR('s anfall');
       const defLabel = mineDef ? TR('Ditt försvar') : e.defender ? esc(who(e.defender)) : TR('Försvar');
       const uc = S.cfg.units;
@@ -5698,7 +5813,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       if (e.wire) foot += TR('Taggtråden gav försvaret +') + e.wire + '. ';
       const stay = e.stay || 0, home = e.survivors - stay;
       if (mineAtk) foot += e.captured ? TR('Rutan är din. ') + capturedTxt(stay, home) :
-        (e.survivors > 0 ? trupper(e.survivors) + TR(' går hem.') : TR('Ingen överlevde.'));
+        e.cleared ? TR('Skogen är rensad men går inte att ta över. ') + trupper(e.survivors) + TR(' går hem.') :
+        (e.survivors > 0 ? trupper(e.survivors) + TR(' går hem.') : TR('Ingen överlevde.') + (e.seen && e.defender ? TR(' Kvar på rutan: ') + (e.D - e.dLoss) + '.' : ''));
       else foot += e.captured ? esc(who(e.player)) + TR(' tog rutan med ') + trupper(e.survivors) + (stay ? '.' : TR(' som sedan gick hem.')) :
         TR('Rutan är kvar som din med ') + (e.D - e.dLoss) + TR(' försvarare.');
       return '<article class="rep ' + (won ? 'won' : 'lost') + '"><div class="rep-head"><span class="rep-kind">' + kind + '</span>' + tclock + '</div>' + link +
@@ -5754,40 +5870,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   }
 
   // =====================================================================
-  //   Toasts
-  // =====================================================================
-  function toast(text, kind, color) {
-    const box = $('toasts');
-    const el = document.createElement('div');
-    el.className = 'toast' + (kind ? ' ' + kind : '');
-    if (color) el.style.borderLeftColor = color;
-    el.textContent = text;
-    box.appendChild(el);
-    while (box.children.length > 3) box.removeChild(box.firstChild);
-    setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 4600);
-  }
-  // Strider, spaningar och anfall visas i Rapporter och under Trupper, inte som notiser.
-  function processLog() {
-    for (const e of S.log) {
-      if (e.id <= toastSeen) continue;
-      toastSeen = e.id;
-      if (e.player !== ME) continue;
-      if (e.kind === 'trained') toast(TR('Kasernen') + inTown(e.town) + ': ' + trupper(e.n) + ' ' + (e.n === 1 ? TR('är klar') : TR('är klara')) + '.');
-      else if (e.kind === 'research') toast(TR('Verkstaden') + inTown(e.town) + ': ' + KIND[e.which].toLowerCase() + TR(' nivå ') + e.level + TR(' är klar.'), 'good');
-      else if (e.kind === 'unlocked') toast(TR('Forskningscentret') + inTown(e.town) + ': ' + UNITS[e.unit].name.toLowerCase() + TR(' är upplåst.'), 'good');
-      else if (e.kind === 'levelup') toast(TR('Nivå ') + e.level + TR('! Du har ') + me().points + ' ' + plural(me().points, LX('färdighetspoäng', 'skill point'), TR('färdighetspoäng')) + TR(' att fördela.'), 'gold');
-      else if (e.kind === 'desert') toast(TR('Matbrist') + inTown(e.town) + TR(': trupper lämnar byn.'), 'bad');
-      else if (e.kind === 'settled') toast(TR('Ny by: ') + e.name + TR(' är grundad.'), 'good');
-      else if (e.kind === 'settleFail') toast(TR('Rutan var inte tom längre. Utvandraren går hem.'), 'bad');
-      else if (e.kind === 'delivered') toast(TR('Transporten kom fram till ') + townName(e.town) + ': ' + resTxt(e.keptGold, e.keptFood, '+') + '.', 'good');
-    }
-  }
-  function positionToasts() {
-    const b = $('hud').getBoundingClientRect().bottom;
-    document.documentElement.style.setProperty('--toast-top', Math.round(b + 8) + 'px');
-  }
-
-  // =====================================================================
   //   Layout och flikar
   // =====================================================================
   function applyLayout() {
@@ -5796,7 +5878,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     ['village', 'troops', 'reports', 'skills'].forEach(v => { $('view-' + v).hidden = ui.desk ? v !== side : v !== ui.tab; });
     $('view-map').hidden = ui.desk ? false : ui.tab !== 'map';
     document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', String(ui.desk ? b.dataset.tab === side : b.dataset.tab === ui.tab)));
-    positionToasts();
     if (!$('view-map').hidden) resizeMap();
     placeSheet(true);
   }
@@ -5814,7 +5895,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     TW();   // håller ui.town giltig
     updateHUD();
     if (!$('view-village').hidden) updateVillage();
-    if (!$('view-troops').hidden) updateTraining(TW());
+    if (!$('view-troops').hidden) { renderHomeUnits(TW()); updateTraining(TW()); }
     if (!$('ov-stand').hidden) renderStand();
     if (!$('view-troops').hidden) renderTroops();
     if (!$('view-skills').hidden) renderSkills();
@@ -5846,9 +5927,9 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     S = E.migrate(state); speed = spd || 1; acc = accMs || 0;
     paused = false; menuOpen = false; winShown = !!S.winner; running = true;
     const last = S.log[S.log.length - 1];
-    toastSeen = reportSeen = last ? last.id : 0;
+    reportSeen = last ? last.id : 0;
     incomingSeen = new Set(S.armies.map(a => a.id));
-    ui.sel = -1; ui.sheetSig = ui.troopsSig = ui.reportsSig = ui.townSig = ''; ui.confirmRecall = false;
+    ui.sel = -1; ui.sheetSig = ui.troopsSig = ui.reportsSig = ui.townSig = ui.homeSig = ''; ui.confirmRecall = false;
     ui.trainKs = {}; ui.sendU = E.U();
     ui.moveOpen = false; ui.move = { to: -1, u: E.U() };
     if (!$('moveWrap').children.length) buildMove();
@@ -5924,7 +6005,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     }
     const st = p.stats;
     $('winStats').innerHTML = [
-      [E.countOwned(S, ME, 'monument'), 'monument'], [E.countOwned(S, ME, 'mine'), TR('guldgruvor')], [E.countOwned(S, ME, 'forest'), TR('skogar')],
+      [E.countOwned(S, ME, 'monument'), 'monument'], [E.countOwned(S, ME, 'mine'), TR('guldgruvor')], [st.captured, TR('erövrade rutor')],
       [p.towns.length, plural(p.towns.length, TR('by'), TR('byar'))], [st.plundered || 0, TR('plundrat')], [st.trained, TR('tränade')],
       [st.killed, TR('besegrade')], [st.lost, TR('förlorade')], [p.level, TR('nivå')],
     ].map(([v, l]) => '<div><b>' + fmt(v) + '</b><span>' + l + '</span></div>').join('');
@@ -5964,7 +6045,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       const trained0 = me().stats.trained;
       while (n-- > 0 && !S.winner) E.step(S);
       if (me().stats.trained > trained0) playTrained();
-      processLog();
       if (S.winner && !winShown) { refresh(true); showWin(); }
     }
   }
@@ -6079,12 +6159,12 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       }
       case 'train': {
         const tw = TW(), k = curTrainK(tw), n = k === 'settler' ? 1 : ui.trainN;
-        if (dispatch({ type: 'train', town: tw.idx, unit: k, count: n }).ok) toast(unitN(k, n) + TR(' i kö i kasernen') + inTown(tw.idx) + '.');
+        dispatch({ type: 'train', town: tw.idx, unit: k, count: n });
         break;
       }
       case 'unlock': {
         const k = b.dataset.unit, tw = TW();
-        if (dispatch({ type: 'unlock', town: tw.idx, unit: k }).ok) toast(TR('Forskningscentret') + inTown(tw.idx) + TR(' låser upp ') + UNITS[k].name.toLowerCase() + TR('. Klar om ') + dur(tw.labbing.done - S.time) + '.');
+        dispatch({ type: 'unlock', town: tw.idx, unit: k });
         break;
       }
       case 'town': {
@@ -6123,7 +6203,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         const tw = TW(), to = ui.move.to, u = E.U(ui.move.u);
         u.settler = 0;
         if (dispatch({ type: 'send', from: tw.idx, to, units: u }).ok) {
-          toast(unitShort(u) + TR(' flyttar till ') + townName(to) + TR(', framme om ') + dur(E.travelMs(S, tw.idx, to)) + '.');
           ui.move.u = E.U();
           updateMove(TW());
         }
@@ -6136,7 +6215,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         const tw = TW(), to = ui.ship.to;
         const r = dispatch({ type: 'transport', from: tw.idx, to, gold: ui.ship.gold, food: ui.ship.food });
         if (r.ok) {
-          toast(resTxt(ui.ship.gold, ui.ship.food) + TR(' är på väg till ') + townName(to) + TR(', framme om ') + dur(E.travelMs(S, tw.idx, to)) + '.');
           ui.ship.gold = 0; ui.ship.food = 0;
           updateShip(tw);
         }
@@ -6173,7 +6251,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         const u = E.U(f.u), to = f.to, ms = E.travelMs(S, f.from, to) / E.sendSpeed(S, me(), to);
         if (dispatch({ type: 'send', from: f.from, to, units: u }).ok) {
           const dest = S.tiles[to].type === 'village' ? townName(to) : TYPES[S.tiles[to].type].name.toLowerCase() + ' ' + coord(S.tiles[to]);
-          toast(unitShort(u) + TR(' sänds vidare till ') + dest + TR(', framme om ') + dur(ms) + '.');
           ui.fwd = null; ui.sheetSig = '';
           renderSheet();
         }
@@ -6192,8 +6269,9 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       case 'send': {
         const src = fromTown(), u = E.U(ui.sendU), tt = S.tiles[ui.sel];
         u.settler = 0;
-        const stay = ui.stay && E.isObjective(tt) && tt.owner !== ME;
+        const stay = ui.stay && E.capturable(tt) && tt.owner !== ME;
         if (dispatch({ type: 'send', from: src.idx, to: ui.sel, units: u, stay }).ok) {
+          ui.stay = false;   // kryssrutan nollställs efter varje anfall
           KEYS.forEach(k => { ui.sendU[k] = Math.min(ui.sendU[k], src.hu[k]); });
           updateSheet();
         }
@@ -6202,7 +6280,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       case 'settle': {
         const src = fromTown(), to = ui.sel;
         if (dispatch({ type: 'send', from: src.idx, to, units: { settler: 1 } }).ok) {
-          toast(TR('Utvandraren är på väg till ') + coord(S.tiles[to]) + TR(', framme om ') + dur(E.travelMs(S, src.idx, to)) + '.');
           ui.sheetSig = '';
           renderSheet();
         }
@@ -6211,12 +6288,11 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       case 'recall': {
         const idx = b.dataset.tile != null ? +b.dataset.tile : ui.sel;
         const r = dispatch({ type: 'recall', tile: idx, half: b.dataset.n === 'half' });
-        if (r.ok) toast(trupper(r.count) + TR(' går hem.'));
         break;
       }
       case 'research': {
         const kind = b.dataset.kind, tw = TW();
-        if (dispatch({ type: 'research', town: tw.idx, kind }).ok) toast(TR('Verkstaden') + inTown(tw.idx) + TR(' arbetar med ') + KIND[kind].toLowerCase() + TR(' nivå ') + tw.researching.level + TR('. Klar om ') + dur(tw.researching.done - S.time) + '.');
+        dispatch({ type: 'research', town: tw.idx, kind });
         break;
       }
       case 'recall-all-ask': ui.confirmRecall = true; renderTroops(); break;
@@ -6224,7 +6300,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       case 'recall-all': {
         ui.confirmRecall = false;
         const r = dispatch({ type: 'recallAll' });
-        if (r.ok) toast(trupper(r.count) + TR(' går hem från objektiven.'));
         break;
       }
       case 'tab': setTab(b.dataset.tab); break;
@@ -6261,7 +6336,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     supabaseKey: 'sb_publishable_eyoxyRNFN4f1KOsOhJjdBQ_LGNIQ3DZ',   // publik nyckel, får synas
     ice: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
   };
-  const PROTO = 1, MAXP = 4, CHUNK = 15000;
+  const PROTO = 2, MAXP = 4, CHUNK = 15000;
   const useLocal = () => !ONLINE_CFG.supabaseUrl || !ONLINE_CFG.supabaseKey || /[?&]lokal\b/.test(location.search);
   function rid(n) {
     const a = 'abcdefghjkmnpqrstuvwxyz23456789', r = crypto.getRandomValues(new Uint8Array(n));
@@ -6676,7 +6751,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       L.onclose = () => guestGone(pl, L);
       if (lob.started) {
         sendStart(pl);
-        if (S && pl.pid) toast(S.players[pl.pid].name + TR(' är tillbaka.'), 'good');
       }
       roomChanged();
     };
@@ -6687,7 +6761,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     const lob = NET.lobby;
     if (!lob || NET.role !== 'host') return;
     if (!lob.started) lob.players = lob.players.filter(p => p !== pl);
-    else if (S && pl.pid && !S.winner) toast(S.players[pl.pid].name + (pl.left ? TR(' lämnade spelet.') : TR(' tappade anslutningen.')));
     pl.left = false;
     roomChanged();
   }
@@ -6805,7 +6878,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         break;
       case 'res':
         NET.pending = Math.max(0, NET.pending - 1);
-        if (!m.ok && m.error) toast(TE(m.error), 'bad');
         guestView(m);
         break;
       case 'end':
@@ -6822,7 +6894,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     const tab = ui.tab;
     beginGame(E.decodeView(m.init, m.v, []), m.speed, 0);
     setTab(again ? tab : 'village');
-    if (again) toast(TR('Ansluten igen.'), 'good');
     guestPause(m.ps);
   }
   function guestView(m) {
@@ -6830,10 +6901,9 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     const trained0 = me().stats.trained;
     S = E.decodeView(NET.init, m.v, S.log);
     acc = 0;
-    if (m.sp && m.sp !== speed) { speed = m.sp; toast(TR('Värden ändrade hastigheten till ') + speed + '×.'); }
+    if (m.sp) speed = m.sp;
     if (me().stats.trained > trained0) playTrained();
-    processLog();
-    noteOnline(m.on);
+    if (m.on) NET.on = m.on;
     guestPause(m.ps);
     if (S.winner && !winShown) { refresh(true); showWin(); }
   }
@@ -6842,20 +6912,11 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if (paused) { setText($('pauseText'), TR('Värden har pausat spelet. Det fortsätter när värden trycker på Fortsätt.')); $('resumeBtn').hidden = true; }
     $('ov-pause').hidden = !paused;
   }
-  function noteOnline(on) {
-    if (!on) return;
-    const prev = NET.on || {};
-    for (const id in on) {
-      if (id === ME || prev[id] === undefined || prev[id] === on[id] || !S.players[id]) continue;
-      toast(S.players[id].name + (on[id] ? TR(' är tillbaka.') : TR(' tappade anslutningen.')), on[id] ? 'good' : '');
-    }
-    NET.on = on;
-  }
   // Gästen kontrollerar handlingen mot sin egen vy direkt (snabbt svar) och skickar den till värden.
-  function guestDispatch(action, quiet) {
-    if (!NET.link) { if (!quiet) toast(TR('Inte ansluten till värden.'), 'bad'); return { ok: false, error: TR('Inte ansluten till värden.') }; }
+  function guestDispatch(action) {
+    if (!NET.link) return { ok: false, error: TR('Inte ansluten till värden.') };
     const r = E.apply(S, Object.assign({ player: ME }, action));
-    if (!r.ok) { if (!quiet) toast(TE(r.error), 'bad'); refresh(true); return r; }
+    if (!r.ok) { refresh(true); return r; }
     NET.pending++; NET.pendingAt = Date.now();
     NET.link.send({ k: 'act', id: ++NET.reqId, a: action });
     refresh(true);
@@ -6927,12 +6988,12 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       TR('På nivå ') + u.settler.lab + TR(' kan kasernen träna en <b>utvandrare</b> för ') + u.settler.cost + TR(' guld, högst en per by. Skicka den till en tom ruta så blir rutan en <b>ny by</b> med egna byggnader, egen produktion och eget förråd (den börjar med ') + c.newTownGold + TR(' guld och ') + c.newTownFood + TR(' mat). Utvandrare strider inte, försvarar inte och kan inte skickas med andra trupper.'),
       TR('Startbyn kan inte anfallas, men <b>nya byar kan det</b>. Trupperna hemma försvarar byn. Vinner anfallaren tar de överlevande med sig guld och mat, <b>tre gånger</b> deras grundanfall, fördelat efter vad som finns i byns förråd: 9 soldater mot ett förråd med 30 guld och 15 mat tar hem 18 guld och 9 mat.'),
       TR('<b>Mur</b>: i byar som inte är startbyar kan du bygga en mur. Varje nivå ger byns försvarare +') + Math.round((c.wallBonusPerLevel || 0) * 100) + TR(' % i försvar när byn anfalls. Muren syns för andra spelare.'),
-      TR('Varje trupp tillhör en by. Flyttar du trupper till en annan av dina byar tillhör de sedan den byn och får dess verkstadsbonus. Erfarenhet, nivåer och färdigheter gäller alla dina byar.'),
-      TR('Kartan är ') + c.mapSize + '×' + c.mapSize + TR(' rutor. Guldgruvor ger +') + Math.round(c.goldMineGoldBonus * 100) + TR(' % guld, skogar +') + Math.round(c.forestFoodBonus * 100) + TR(' % mat (i alla dina byar) och monument <b>') + c.vpPerMonumentPerMinute + TR(' vinstpoäng per minut</b>.'),
+      TR('Varje trupp tillhör en by och äter av dess mat. Flyttar du trupper till en annan av dina byar tillhör de sedan den byn. Erfarenhet, nivåer, färdigheter och verkstadens förbättringar gäller alla dina byar.'),
+      TR('Kartan är ') + c.mapSize + '×' + c.mapSize + TR(' rutor. Guldgruvor ger +') + Math.round(c.goldMineGoldBonus * 100) + TR(' % guld (i alla dina byar) och monument <b>') + c.vpPerMonumentPerMinute + TR(' vinstpoäng per minut</b>. Skogar går inte att ta över, men där dyker neutrala soldater upp som du kan döda för guld och exp.'),
       TR('Guldgruvor och skogar börjar med ') + c.mineStartTroops + TR(' försvarare, monument med ') + c.monumentStartTroops + TR('. Neutrala soldater dyker upp på objektiven: ') + Math.round(c.spawnBaseChance * 100) + TR(' % chans per minut, och chansen ökar med ') + n1(c.spawnChancePerMinute * 100) + TR(' procentenheter för varje spelad minut. Neutrala blir högst ') + c.tileCap.mine + TR(' på en guldgruva eller skog och högst ') + c.tileCap.monument + TR(' på ett monument. Du själv kan ha hur många trupper som helst på dina objektiv. Erövrade objektiv får inga nya neutrala.'),
-      TR('<b>Dimma</b>: du ser inte hur många som står på en annan spelares ruta eller i deras byar, eller hur stora andras arméer är, bara att de rör sig. Du får veta genom spaning, eller när dina trupper överlever en strid där.'),
+      TR('<b>Dimma</b>: du ser inte hur många som står på en annan spelares ruta eller i deras byar, eller hur stora andras arméer är, bara att de rör sig. Du får veta genom spaning, när dina trupper överlever en strid där, eller när ditt anfall dödar minst två försvarare. Kartan visar då det senast kända antalet med ett frågetecken, till exempel 4?.'),
       TR('Trupper går ') + c.marchFieldsPerMinute + TR(' rutor per minut. Anfallspoäng och försvarspoäng räknas ihop för alla trupper. Den överlägsna sidan får sin överlägsenhet dubblad. Varje sida förlorar sedan andelen <b>motståndarens poäng delat med de egna</b> av sina trupper, avrundat nedåt. Exempel: 10 mot 5 blir 15 mot 5, så anfallaren förlorar en tredjedel (3) och försvararen alla. Den svagare sidan förlorar alltid alla, och vid lika poäng dör alla på båda sidor.'),
-      TR('Dödar du alla försvarare på ett objektiv blir det ditt. <b>Efter en strid går de överlevande alltid hem</b>, så en erövrad ruta står tom tills du förstärker den. Skicka gärna förstärkning direkt efter anfallet; kommer den fram efter striden förstärker den rutan. Varje neutral soldat du dödar ger <b>') + c.killReward + TR(' guld</b>.'),
+      TR('Dödar du alla försvarare på en guldgruva eller ett monument blir rutan din. <b>Efter en strid går de överlevande alltid hem</b>, så en erövrad ruta står tom tills du förstärker den. Skicka gärna förstärkning direkt efter anfallet; kommer den fram efter striden förstärker den rutan. Varje neutral soldat du dödar ger <b>') + c.killReward + TR(' guld</b>.'),
       TR('Vill du att anfallet ska behålla rutan kryssar du i <b>Stanna och försvara</b> innan du skickar; då stannar de överlevande som garnison om rutan erövras.'),
       TR('<b>Startbyar är skyddade</b> (skölden på kartan) och kan inte anfallas. Byar du grundar senare kan anfallas och har streckad ram.'),
       TR('<b>Skicka guld och mat</b> mellan dina byar under Byn. Transporten går lika fort som trupper, och det som inte ryms i mottagarens förråd går förlorat.'),
@@ -6940,7 +7001,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       TR('<b>Sänd vidare</b>: från ett av dina objektiv kan du skicka trupper vidare till ett annat av dina objektiv eller till vilken som helst av dina byar. Tryck på Sänd vidare trupper och sedan på målet på kartan. Till en by flyttar trupperna in och tillhör sedan den byn. Det fungerar bara som förstärkning: är ett objektiv inte ditt när trupperna kommer fram går de hem i stället för att anfalla.'),
       TR('<b>Spaning</b>: skickar du bara scouter dödar de ingen och tar ingen ruta. Överlever någon får du se vilka trupper som står där, och i en by även hur mycket guld och mat som finns. Ägaren ser inte scouterna komma men får en rapport efteråt. Försvarande scouter dödar anfallande scouter med samma regler som en vanlig strid.'),
       TR('<b>Erfarenhet</b>: ') + c.expPerPlayerKill + TR(' exp per dödad fiendetrupp och ') + c.expPerNeutralKill + TR(' per dödad neutral soldat. Första nivån kräver ') + c.expFirstLevel + TR(' exp och varje ny nivå ') + Math.round((c.expGrowth - 1) * 100) + TR(' % mer. Varje nivå ger ett poäng i färdighetsträden anfall, försvar och ekonomi.'),
-      TR('I <b>verkstaden</b> förbättrar du anfall och försvar för alla byns trupper med +') + Math.round(c.researchBonusPerLevel * 100) + TR(' % per nivå, eller både anfall och försvar för en trupptyp i taget (soldat, berserker, sköldgrabb). Varje sak kan förbättras en gång per verkstadsnivå, en förbättring i taget, och varje verkstadsnivå gör arbetet ') + Math.round((1 - c.workshopSpeedFactor) * 100) + TR(' % snabbare.'),
+      TR('I <b>verkstaden</b> förbättrar du anfall och försvar för alla dina trupper med +') + Math.round(c.researchBonusPerLevel * 100) + TR(' % per nivå, eller både anfall och försvar för en trupptyp i taget (soldat, berserker, sköldgrabb). Förbättringarna gäller alla dina byar. Varje sak kan förbättras upp till nivån på verkstaden där du gör det, varje verkstad har en kö på ') + c.researchQueueMax + TR(' förbättringar, och varje verkstadsnivå gör arbetet ') + Math.round((1 - c.workshopSpeedFactor) * 100) + TR(' % snabbare.'),
       TR('<b>Två rivaler</b> bygger sina byar på kartan och spelar efter samma regler, dimman inräknad. De anfaller dig och varandra och grundar så småningom egna byar. En rivals trupper ger inget guld.'),
       TR('<b>Kalla hem alla</b> under Trupper tar hem trupperna som står på dina objektiv, var och en till sin egen by. Trupper som redan är på väg fortsätter.'),
       TR('Först till <b>') + c.vpToWin + TR(' vinstpoäng</b> vinner.'),
