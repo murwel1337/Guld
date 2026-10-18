@@ -801,6 +801,11 @@ button.stat:hover { background: var(--slab-3); }
 .seg.three button { font: 600 15px var(--f-body); }
 .stand-end { justify-self: end; display: flex; align-items: center; gap: 6px; }
 .stand-end .tag { margin: 0; }
+/* Dator med smalare fönster: loggan ger plats åt nivå, by och siffror. */
+@media (min-width: 960px) and (max-width: 1199px) {
+  .hud .brand { display: none; }
+  .hud { grid-template-columns: 0 minmax(0, 1fr) minmax(440px, 600px) auto auto; gap: 12px; }
+}
 
 </style>
 </head>
@@ -3104,8 +3109,13 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   function sMin() { return Math.min(fitScale(), 24); }
   function clampCam() {
     const N = boardN(), s = cam.s, M = 30;
-    const bw = N * s, availH = cam.h - sheetCover(), availW = cam.w - sheetCoverRight();
-    if (bw + 2 * M <= availW) cam.ox = (availW - bw) / 2; else cam.ox = clamp(cam.ox, availW - bw - M, M);
+    const bw = N * s, availH = cam.h - sheetCover(), right = sheetCoverRight(), availW = cam.w - right;
+    if (bw + 2 * M <= availW) cam.ox = (availW - bw) / 2;
+    else if (right && bw + 2 * M <= cam.w) {
+      // Dator med rutpanelen öppen: brädet står kvar i mitten och flyttas bara åt vänster om rutan man valt skyms.
+      const mid = (cam.w - bw) / 2;
+      cam.ox = clamp(cam.ox, Math.min(mid, availW - bw - M), mid);
+    } else cam.ox = clamp(cam.ox, availW - bw - M, M);
     if (bw + 2 * M <= availH) cam.oy = (availH - bw) / 2; else cam.oy = clamp(cam.oy, availH - bw - M, M);
   }
   function centerOn(idx, scale) {
@@ -3145,6 +3155,16 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   }
   function ensureVisible(idx) {
     const t = S.tiles[idx];
+    const sh = $('sheet');
+    if (ui.desk && !sh.hidden) {
+      // Panelen ligger nere till höger: flytta brädet bara om den täcker den valda rutan.
+      const r = sh.getBoundingClientRect(), m = cv.getBoundingClientRect();
+      const left = r.left - m.left - 12, top = r.top - m.top - 12;
+      const x1 = cam.ox + (t.x + 1) * cam.s, y1 = cam.oy + (t.y + 1) * cam.s;
+      if (x1 > left && y1 > top) cam.ox -= x1 - left;
+      clampCam();
+      return;
+    }
     const availH = cam.h - sheetCover(), availW = cam.w - sheetCoverRight();
     const cx = cam.ox + (t.x + 0.5) * cam.s, cy = cam.oy + (t.y + 0.5) * cam.s;
     if (cy > availH - cam.s * 0.8 || cy < cam.s * 0.8) cam.oy += availH / 2 - cy;
