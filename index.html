@@ -530,6 +530,8 @@ svg.uic { width: 20px; height: 20px; flex: none; }
 .rep-side { padding: 8px 10px; background: var(--slab-2); border-radius: 6px; display: grid; gap: 2px; font-size: 14px; color: var(--ink-dim); }
 .rep-side b { color: var(--ink); font-family: var(--f-num); font-size: 17px; font-variant-numeric: tabular-nums; }
 .rep-side .loss { color: var(--bad); font-family: var(--f-num); font-weight: 700; font-size: 16px; }
+.rep-side .loss-i { color: var(--bad); font-family: var(--f-num); font-weight: 700; font-size: 15px; margin-left: 4px; }
+.rep-side .loss-sum { margin-top: 2px; font-size: 13px; color: var(--ink-faint); }
 .rep p { margin: 0; font-size: 14px; color: var(--ink-dim); }
 .rep p b { color: var(--gold); font-family: var(--f-num); font-size: 16px; }
 
@@ -835,6 +837,10 @@ button.stat:hover { background: var(--slab-3); }
 .obj-acts .btn { min-height: 34px; padding: 6px 10px; font-size: 14px; }
 .seg.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .seg.two button { font: 600 15px var(--f-body); }
+/* Rullningslisten får alltid plats, så att innehållet inte flyttas när den dyker upp. */
+.sheet { scrollbar-gutter: stable; overscroll-behavior: contain; align-content: start; }  /* raderna sträcks inte ut när panelens ram är låst */
+/* Mobilens automatiska textförstoring ändrade storlek på texten när prognosen blev längre, så att knapparna flyttade sig. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
 </style>
 </head>
@@ -860,6 +866,7 @@ button.stat:hover { background: var(--slab-3); }
     <symbol id="b-farm" viewBox="0 0 32 32"><path d="M2 21h28v8H2z" fill="#6b4a2f"/><path d="M2 24.5h28" stroke="#58391f" stroke-width="1.4"/><ellipse cx="9" cy="24.3" rx="2.6" ry="1.9" fill="#cf9f5f"/><ellipse cx="22.5" cy="25" rx="2.3" ry="1.7" fill="#cf9f5f"/><path d="M9 21V13M23 21v-9" stroke="#4d7a37" stroke-width="1.8"/><path d="M9 15c-3.4-.2-5-2.5-5-5 3 0 4.8 2 5 5zM9 16c2.4-2.8 5-3 6.5-1.7-1.4 2.2-4 2.7-6.5 1.7zM23 13.5c-3-1-4.2-3.4-3.6-6 2.8.6 4 3 3.6 6zM23 15c2.5-2.5 5.2-2.6 6.5-1.2-1.6 2-4.2 2.4-6.5 1.2z" fill="#6f9c4b"/></symbol>
     <symbol id="b-barracks" viewBox="0 0 32 32"><circle cx="16" cy="16" r="12.5" fill="#b43a2c"/><path d="M16 3.5v25M3.5 16h25" stroke="#8e2b20" stroke-width="1.4"/><path d="M7.2 7.2l17.6 17.6M24.8 7.2L7.2 24.8" stroke="#8e2b20" stroke-width="1"/><circle cx="16" cy="16" r="12.5" fill="none" stroke="#5f6866" stroke-width="2"/><circle cx="16" cy="16" r="4.4" fill="#b4bcb8"/><circle cx="16" cy="16" r="4.4" fill="none" stroke="#717a77" stroke-width="1.2"/></symbol>
     <symbol id="b-treasury" viewBox="0 0 32 32"><path d="M4 14h24v13H4z" fill="#7a5235"/><path d="M4 14c0-5 5-8 12-8s12 3 12 8z" fill="#8f6240"/><path d="M4 14h24M4 20h24" stroke="#d29e35" stroke-width="2"/><path d="M8.5 6.8V27M23.5 6.8V27" stroke="#d29e35" stroke-width="2"/><rect x="13.5" y="16.5" width="5" height="6" rx="1" fill="#e6b443"/><circle cx="16" cy="19" r="1" fill="#5a3b25"/></symbol>
+    <symbol id="b-wall" viewBox="0 0 32 32"><path d="M3 28V9h5v4h3V9h5v4h3V9h5v4h3V9h3v19z" fill="#9aa09f"/><path d="M3 28V9h5v4h3V9h5v4h3V9h5v4h3V9h3v19z" fill="none" stroke="#5f6866" stroke-width="1.4" stroke-linejoin="round"/><path d="M3 18.5h26M3 23.5h26M11 13v5.5M19 13v5.5M27 13v5.5M7 18.5v5M15 18.5v5M23 18.5v5M11 23.5v4.5M19 23.5v4.5M27 23.5v4.5" stroke="#6b7270" stroke-width="1.2"/></symbol>
     <symbol id="b-granary" viewBox="0 0 32 32"><path d="M2 27c1.5-9 7-15 14-15s12.5 6 14 15z" fill="#5d7c42"/><path d="M6 20c3-4 6-5.5 10-5.5" fill="none" stroke="#719350" stroke-width="1.6" stroke-linecap="round"/><path d="M10.5 27v-6.5a5.5 5.5 0 0111 0V27z" fill="#9aa09f"/><path d="M12.8 27v-6a3.2 3.2 0 016.4 0v6z" fill="#6b4a2f"/><path d="M16 17.8v9.2" stroke="#4f3520" stroke-width="1"/></symbol>
     <symbol id="b-workshop" viewBox="0 0 32 32"><path d="M4 12.5h18.5c-.4 3.4-3 5.6-6.5 6V22h4.5v3.5h-12V22H13v-3.5c-4.4-.4-7.8-2.6-9-6z" fill="#7d8784"/><path d="M4 12.5h18.5v1.8H4.6z" fill="#aab2b0"/><path d="M22.5 12.5H28c-.9 2-3 3-5.5 3z" fill="#6c7673"/><path d="M15.6 9.6l7.6-7.6 1.6 1.6-7.6 7.6z" fill="#8a5d3b"/><path d="M21.3 1.4l6.3 6.3-2.6 2.6-6.3-6.3z" fill="#c9ced0"/><path d="M21.3 1.4l6.3 6.3-1 1-6.3-6.3z" fill="#e5e8e9"/></symbol>
     <symbol id="t-skills" viewBox="0 0 24 24"><path d="M12 3.2l2.6 5.5 6 .7-4.4 4.1 1.2 5.9L12 16.5l-5.4 2.9 1.2-5.9-4.4-4.1 6-.7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
@@ -1219,7 +1226,9 @@ const Engine = (function () {
     researchBonusPerLevel: 0.04,  // verkstaden: +4 % anfall eller försvar per nivå
     researchCostFirst: 40,        // [antagande] nivå 1 kostar 40 guld ...
     researchCostGrowth: 1.5,
-    researchCostGrowthHigh: 1.2,  // förbättringar över nivå 10 blir 20 % dyrare per nivå (ryms i en full skattkammare)      // [antagande] ... och varje nivå × 1,5
+    researchCostGrowthHigh: 1.2,
+    wallBonusPerLevel: 0.05,      // muren: +5 % försvar per nivå för byns försvarare
+    plunderFactor: 3,             // vid plundring bär varje överlevande 3 × sitt grundanfall  // förbättringar över nivå 10 blir 20 % dyrare per nivå (ryms i en full skattkammare)      // [antagande] ... och varje nivå × 1,5
     researchMinutesPerLevel: 2,   // [antagande] nivå L tar L × 2 minuter
     workshopSpeedFactor: 0.9,     // varje verkstadsnivå över 1 gör förbättringarna 10 % snabbare
     spawnBaseChance: 0.20,
@@ -1267,6 +1276,7 @@ const Engine = (function () {
       workshop: { start: 0, max: 20, costBase: 50, costPerLevel: 50, steepFrom: 10, steepGrowth: 1.35 },
       lab:      { start: 0, max: 4, costList: [30, 50, 80, 120] },      // forskningscenter [antagande: nivå 4 kostar 120]
       treasury: { start: 0, max: 10, costBase: 40, costPerLevel: 40 },  // [antagande]
+      wall:     { start: 0, max: 10, costBase: 40, costPerLevel: 40 },  // mur: bara i byar som inte är startbyar [antagande: kostnad och tak]
       granary:  { start: 0, max: 10, costBase: 40, costPerLevel: 40 },  // [antagande]
     },
     // Bottarnas svårighetsgrader.
@@ -1430,7 +1440,7 @@ const Engine = (function () {
     const nRivals = humans ? 0 : rival ? (opts.rivalCount != null ? opts.rivalCount : cfg.rivalCount) : 0;
     const N = cfg.mapSize;
     const s = {
-      v: 12, cfg, seed, rng: seed, time: 0, nextSpawnAt: MINUTE,
+      v: 13, cfg, seed, rng: seed, time: 0, nextSpawnAt: MINUTE,
       tiles: [], towns: {}, players: {}, order: [], armies: [], caravans: [], log: [],
       nextId: 1, winner: null, endedAt: null, online: !!humans,
     };
@@ -1726,7 +1736,11 @@ const Engine = (function () {
   // Kan byn anfallas? Startbyar aldrig.
   function attackableTown(s, idx) { const tw = s.towns[idx]; return !!tw && !tw.start; }
   // Hur mycket de överlevande kan bära hem: summan av deras grundanfall.
-  function carryCapacity(s, u) { return Math.floor(powerC(s.cfg, u, 'atk') + 1e-9); }
+  function carryCapacity(s, u) { return Math.floor(powerC(s.cfg, u, 'atk') * (s.cfg.plunderFactor || 1) + 1e-9); }
+  // Muren gäller bara när byn själv försvaras (inte byns trupper ute på objektiv).
+  function wallBonus(s, tw) { return tw && tw.buildings && tw.buildings.wall ? (s.cfg.wallBonusPerLevel || 0) * tw.buildings.wall : 0; }
+  function townDefMult(s, p, tw) { return defenseMult(s, p, tw) + wallBonus(s, tw); }
+  function townDefVec(s, p, tw) { const v = defenseVec(s, p, tw), w = wallBonus(s, tw); for (const k in v) v[k] += w; return v; }
   function plunderOf(cap, gold, food) {
     gold = Math.max(0, Math.floor(gold)); food = Math.max(0, Math.floor(food));
     const stock = gold + food;
@@ -1809,6 +1823,7 @@ const Engine = (function () {
       case 'upgrade': {
         const def = cfg.buildings[a.building];
         if (!def) return fail('Okänd byggnad.');
+        if (a.building === 'wall' && tw.start) return fail('Startbyn kan inte ha någon mur.');
         const L = tw.buildings[a.building];
         if (atMax(def, L)) return fail('Byggnaden har redan högsta nivån.');
         const cost = upgradeCost(s, a.building, L);
@@ -2214,7 +2229,7 @@ const Engine = (function () {
       if (survivors > 0) learn(s, p, a.to);   // överlevande såg försvaret
       if (p.bot) { p.avoid = p.avoid || {}; p.avoid[a.to] = s.time + 6 * MINUTE; }  // boten minns misslyckade mål
     }
-    log(s, { kind: 'battle', player: p.id, defender, tile: a.to, A, D, aU: aU0, dU: dU0, aLossU: r.aLossU, dLossU: r.dLossU, aPow: r.aPow, dPow: r.dPow, aLoss: r.aLoss, dLoss: r.dLoss, loot, lootKept, captured, survivors, stay, seen: survivors > 0, expA, expD, wire });
+    log(s, { kind: 'battle', player: p.id, defender, tile: a.to, A, D, aU: aU0, dU: dU0, aLossU: r.aLossU, dLossU: r.dLossU, aPow: r.aPow, dPow: r.dPow, aLoss: r.aLoss, dLoss: r.dLoss, loot, lootKept, captured, survivors, stay, seen: survivors > 0 || r.dLoss >= 2, expA, expD, wire });
     gainExp(s, p, expA);
     gainExp(s, dp, expD);
   }
@@ -2225,7 +2240,7 @@ const Engine = (function () {
   function townAttack(s, a, tile, p, homeTown, sendBack) {
     const cfg = s.cfg, tw = s.towns[a.to], dp = s.players[tw.owner];
     const dU = fighters(tw.hu), A = a.count, D = total(dU), aU0 = U(a.u);
-    const r = D > 0 ? battleUnits(s, a.u, dU, attackVec(s, p, homeTown), defenseVec(s, dp, tw))
+    const r = D > 0 ? battleUnits(s, a.u, dU, attackVec(s, p, homeTown), townDefVec(s, dp, tw))
       : { aPow: round2(powerM(cfg, a.u, 'atk', attackVec(s, p, homeTown))), dPow: 0, aLoss: 0, dLoss: 0, aLossU: U(), dLossU: U() };
     subFrom(tw.hu, r.dLossU); syncTown(tw);
     const survU = subFrom(U(a.u), r.aLossU), survivors = total(survU);
@@ -2243,7 +2258,7 @@ const Engine = (function () {
     }
     const expA = r.dLoss * cfg.expPerPlayerKill, expD = r.aLoss * cfg.expPerPlayerKill;
     if (survivors > 0) learn(s, p, a.to); else if (p.bot) { p.avoid = p.avoid || {}; p.avoid[a.to] = s.time + 6 * MINUTE; }
-    log(s, { kind: 'raid', player: p.id, defender: tw.owner, tile: a.to, A, D, aU: aU0, dU, aLossU: r.aLossU, dLossU: r.dLossU, aPow: r.aPow, dPow: r.dPow, aLoss: r.aLoss, dLoss: r.dLoss, survivors, won, plunder, seen: survivors > 0, expA, expD });
+    log(s, { kind: 'raid', player: p.id, defender: tw.owner, tile: a.to, A, D, aU: aU0, dU, aLossU: r.aLossU, dLossU: r.dLossU, aPow: r.aPow, dPow: r.dPow, aLoss: r.aLoss, dLoss: r.dLoss, survivors, won, plunder, seen: survivors > 0 || r.dLoss >= 2, expA, expD });
     gainExp(s, p, expA);
     gainExp(s, dp, expD);
   }
@@ -2382,7 +2397,7 @@ const Engine = (function () {
         const att = s.players[incoming[0].owner];
         const have = defendersAt(s, idx);
         s.armies.filter(x => x.owner === p.id && x.to === idx && x.arrive < first).forEach(x => addTo(have, fighters(x.u)));
-        const dMul = isTown ? defenseVec(s, p, s.towns[idx]) : garrisonDefVec(s, t);
+        const dMul = isTown ? townDefVec(s, p, s.towns[idx]) : garrisonDefVec(s, t);
         const flat = isTown ? 0 : wireBonus(s, p);
         const guessA = needSoldiers(s, have, attackMult(s, att, null), dMul, flat) + 2 + Math.floor(total(have) * 0.3);
         const attU = U({ soldier: Math.min(guessA, 60) });
@@ -2502,6 +2517,7 @@ const Engine = (function () {
     if (wantSettler && B.barracks > 0) invest.unshift(['settler', cfg.units.settler.cost, () => act(Object.assign({ type: 'train', unit: 'settler', count: 1 }, t)).ok]);
     if (B.barracks > 0 && canUp('barracks') && ageMin > 3 && B.barracks < 2 + Math.floor(ageMin / 15) && gph / 10 > (HOUR / trainMs(s, tw)) * 0.9) invest.push(['barracks', costOf('barracks'), () => up('barracks')]);
     if (payback < limit) invest.push(['goldmine', costOf('goldmine'), () => up('goldmine')]);
+    if (!tw.start && canUp('wall') && B.wall < Math.floor(ageMin / 8)) invest.push(['wall', costOf('wall'), () => up('wall')]);
     if (prof.research && ageMin > 15 && tArmy >= 8 + ageMin * 0.25) {
       if (B.workshop < Math.min(cfg.buildings.workshop.max, Math.floor(ageMin / 18))) invest.push(['workshop', costOf('workshop'), () => up('workshop')]);
       else if (!tw.researching) {
@@ -2573,7 +2589,7 @@ const Engine = (function () {
       const known = !enemy || (p.intel[i] && s.time - p.intel[i].t < 5 * MINUTE);
       // Samma antagande oavsett om ägaren är människa eller bot.
       if (canReact) dU.soldier += Math.max(2, Math.ceil(total(dU) * 0.5)); else if (enemy) dU.soldier += 1;
-      const dMul = enemy ? (enemyTown ? defenseMult(s, owner, s.towns[i]) : defenseMult(s, owner, null)) : 1;
+      const dMul = enemy ? (enemyTown ? townDefMult(s, owner, s.towns[i]) : defenseMult(s, owner, null)) : 1;
       const dFlat = enemy && !enemyTown ? wireBonus(s, owner) : 0;   // taggtråden syns på kartan
       const need = needSoldiers(s, dU, aMul, dMul, dFlat);
       if (avoid[i] > s.time && need * 1.5 > atkAvail()) return;   // nyss misslyckat här
@@ -2704,6 +2720,15 @@ const Engine = (function () {
       s.cfg.barracksSpeedFactorHigh = CONFIG.barracksSpeedFactorHigh;
       s.cfg.researchCostGrowthHigh = CONFIG.researchCostGrowthHigh;
       s.v = 12;
+      return migrate(s);
+    }
+    if (s.v === 12) {
+      // 12 → 13: mur i byar som inte är startbyar, och tre gånger så mycket byte vid plundring.
+      s.cfg.buildings.wall = JSON.parse(JSON.stringify(CONFIG.buildings.wall));
+      s.cfg.wallBonusPerLevel = CONFIG.wallBonusPerLevel;
+      s.cfg.plunderFactor = CONFIG.plunderFactor;
+      for (const k in s.towns) if (s.towns[k].buildings.wall == null) s.towns[k].buildings.wall = 0;
+      s.v = 13;
       return s;
     }
     if (s.v !== 6) return s;
@@ -2718,7 +2743,7 @@ const Engine = (function () {
     return migrate(s);
   }
   function isValidSave(s) {
-    return !!(s && s.v >= 6 && s.v <= 12 && s.cfg && Array.isArray(s.tiles) && s.towns && s.players && s.order && s.tiles.length === s.cfg.mapSize * s.cfg.mapSize);
+    return !!(s && s.v >= 6 && s.v <= 13 && s.cfg && Array.isArray(s.tiles) && s.towns && s.players && s.order && s.tiles.length === s.cfg.mapSize * s.cfg.mapSize);
   }
 
   // =====================================================================
@@ -2752,7 +2777,7 @@ const Engine = (function () {
     const tw = [];
     for (const k in s.towns) {
       const x = s.towns[k];
-      tw.push(x.owner === pid ? x : { idx: x.idx, owner: x.owner, name: x.name, start: x.start, founded: x.founded });
+      tw.push(x.owner === pid ? x : { idx: x.idx, owner: x.owner, name: x.name, start: x.start, founded: x.founded, wall: x.buildings.wall || 0 });
     }
     const pl = s.order.map(id => {
       const p = s.players[id];
@@ -2773,7 +2798,7 @@ const Engine = (function () {
   }
   function decodeView(init, v, prevLog) {
     const cfg = init.cfg, N = cfg.mapSize;
-    const s = { v: 12, cfg, seed: init.seed, rng: 0, time: v.t, nextSpawnAt: v.ns, tiles: [], towns: {}, players: {}, order: v.ord.slice(),
+    const s = { v: 13, cfg, seed: init.seed, rng: 0, time: v.t, nextSpawnAt: v.ns, tiles: [], towns: {}, players: {}, order: v.ord.slice(),
       armies: v.ar, caravans: v.cv, log: [], nextId: v.nid, winner: v.w, endedAt: v.e, online: true, view: true };
     for (let i = 0; i < N * N; i++) s.tiles.push({ x: i % N, y: Math.floor(i / N), type: CODE_TYPE[v.ty[i]], owner: null, u: U(), troops: 0, g: {}, look: init.look[i] });
     for (const r of v.tl) {
@@ -2786,6 +2811,7 @@ const Engine = (function () {
       if (x.buildings) { s.towns[x.idx] = x; continue; }
       const full = makeTown(s, x.idx, x.owner, x.name, x.start, 0, 0);
       full.founded = x.founded;
+      full.buildings.wall = x.wall || 0;
       s.towns[x.idx] = full;
     }
     for (const p of v.pl) {
@@ -2802,7 +2828,7 @@ const Engine = (function () {
     initFor, encodeView, decodeView, logRelevant,
     createGame, apply, step, advance, isValidSave, migrate, botThink, atMax, tileCap,
     U, total, addTo, subFrom, pick, give, onlyScouts, onlySettlers, fighters, armyUnits, townUnits, visibleTroops, defendersAt,
-    town, townsOf, attackableTown, carryCapacity, plunderOf, garrisonDefMult,
+    town, townsOf, attackableTown, carryCapacity, plunderOf, wallBonus, townDefMult, townDefVec, garrisonDefMult,
     battle, battleUnits, fillAttack, troopsToCapture, needSoldiers, isObjective, dist, travelMs, armyPos,
     upgradeCost, goldCap, foodCap, prodAtLevel, foodAtLevel, mineBonus, goldPerHour, foodProdPerHour,
     expToNext, skillBlock, treePoints, sendSpeed, wireBonus, returnSpeed,
@@ -2995,7 +3021,6 @@ window.GP_EN = {
 " Byt namn</button></div>": " Rename</button></div>",
 "Flytta trupper hit": "Move troops here",
 "<p class=\"lede\">En by som ": "<p class=\"lede\">A village that ",
-" har grundat. Den går att anfalla: besegrar du försvararna tar de överlevande med sig guld och mat, lika mycket som deras grundanfall.</p>": " has founded. It can be attacked: if you defeat the defenders, the survivors carry off gold and food equal to their base attack.</p>",
 "<dl class=\"facts\"><div><dt>Försvarare</dt><dd id=\"sh-def\"></dd></div><div><dt>Förråd</dt><dd id=\"sh-store\"></dd></div>": "<dl class=\"facts\"><div><dt>Defenders</dt><dd id=\"sh-def\"></dd></div><div><dt>Stores</dt><dd id=\"sh-store\"></dd></div>",
 "<div><dt>Marsch</dt><dd id=\"sh-travel\"></dd></div><div><dt>Vinstpoäng</dt><dd>": "<div><dt>March</dt><dd id=\"sh-travel\"></dd></div><div><dt>Victory points</dt><dd>",
 "Byn": "The village",
@@ -3365,7 +3390,6 @@ window.GP_EN = {
 " kan kasernen träna en <b>utvandrare</b> för ": " the barracks can train a <b>settler</b> for ",
 " guld, högst en per by. Skicka den till en tom ruta så blir rutan en <b>ny by</b> med egna byggnader, egen produktion och eget förråd (den börjar med ": " gold, at most one per village. Send it to an empty tile and the tile becomes a <b>new village</b> with its own buildings, production and stores (it starts with ",
 " mat). Utvandrare strider inte, försvarar inte och kan inte skickas med andra trupper.": " food). Settlers do not fight, do not defend and cannot be sent together with other troops.",
-"Startbyn kan inte anfallas, men <b>nya byar kan det</b>. Trupperna hemma försvarar byn. Vinner anfallaren tar de överlevande med sig guld och mat lika mycket som deras grundanfall, fördelat efter vad som finns i byns förråd: 9 soldater mot ett förråd med 20 guld och 10 mat tar hem 6 guld och 3 mat.": "The starting village cannot be attacked, but <b>new villages can</b>. The troops at home defend the village. If the attacker wins, the survivors carry off gold and food equal to their base attack, split by what is in the village stores: 9 soldiers against stores of 20 gold and 10 food bring home 6 gold and 3 food.",
 "Varje trupp tillhör en by. Flyttar du trupper till en annan av dina byar tillhör de sedan den byn och får dess verkstadsbonus. Erfarenhet, nivåer och färdigheter gäller alla dina byar.": "Every troop belongs to a village. If you move troops to another of your villages, they then belong to that village and get its workshop bonus. Experience, levels and skills apply to all your villages.",
 "Kartan är ": "The map is ",
 " rutor. Guldgruvor ger +": " tiles. Gold mines give +",
@@ -3552,7 +3576,20 @@ window.GP_EN = {
 "Hemma: ": "At home: ",
 "Rutan ": "The tile ",
 "Rymmer ": "Holds ",
-"Visar ": "Showing "
+"Visar ": "Showing ",
+"Startbyn kan inte anfallas, men <b>nya byar kan det</b>. Trupperna hemma försvarar byn. Vinner anfallaren tar de överlevande med sig guld och mat, <b>tre gånger</b> deras grundanfall, fördelat efter vad som finns i byns förråd: 9 soldater mot ett förråd med 30 guld och 15 mat tar hem 18 guld och 9 mat.": "The starting village cannot be attacked, but <b>new villages can</b>. The troops at home defend the village. If the attacker wins, the survivors carry off gold and food, <b>three times</b> their base attack, split by what is in the village stores: 9 soldiers against stores of 30 gold and 15 food bring home 18 gold and 9 food.",
+" har grundat. Den går att anfalla: besegrar du försvararna tar de överlevande med sig guld och mat, tre gånger deras grundanfall.</p>": " has founded. It can be attacked: if you defeat the defenders, the survivors carry off gold and food, three times their base attack.</p>",
+" neutrala": " neutrals",
+"Förlorade: ": "Lost: ",
+"Inga förluster": "No losses",
+"Mur": "Wall",
+"Inget extra försvar": "No extra defence",
+"Försvar +": "Defence +",
+" % när byn anfalls": " % when the village is attacked",
+"Mur nivå ": "Wall level ",
+"Startbyn kan inte ha någon mur.": "The starting village cannot have a wall.",
+"<b>Mur</b>: i byar som inte är startbyar kan du bygga en mur. Varje nivå ger byns försvarare +": "<b>Wall</b>: in villages other than your starting village you can build a wall. Each level gives the village defenders +",
+" % i försvar när byn anfalls. Muren syns för andra spelare.": " % defence when the village is attacked. Other players can see the wall."
 };
 window.GP_EN_BODY = {
 "Nivå och erfarenhet": "Level and experience",
@@ -4353,6 +4390,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     { key: 'lab', name: TR('Forskningscenter'), icon: 'b-lab' },
     { key: 'treasury', name: TR('Skattkammare'), icon: 'b-treasury' },
     { key: 'granary', name: TR('Jordkällare'), icon: 'b-granary' },
+    { key: 'wall', name: TR('Mur'), icon: 'b-wall' },
   ];
   function effect(key, L) {
     const c = S.cfg;
@@ -4364,6 +4402,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       case 'workshop': return L < 1 ? TR('Kan inte förbättra') : TR('Förbättringar till nivå ') + L + (L > 1 ? ', ' + Math.round((1 - Math.pow(c.workshopSpeedFactor || 1, L - 1)) * 100) + TR(' % snabbare') : '');
       case 'treasury': return TR('Rymmer ') + fmt(c.baseCapacity + c.capacityPerLevel * L) + TR(' guld');
       case 'granary': return TR('Rymmer ') + fmt(c.baseCapacity + c.capacityPerLevel * L) + TR(' mat');
+      case 'wall': return L < 1 ? TR('Inget extra försvar') : TR('Försvar +') + Math.round(L * (c.wallBonusPerLevel || 0) * 100) + TR(' % när byn anfalls');
     }
     return '';
   }
@@ -4612,7 +4651,10 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     updateShip(tw);
     updateMove(tw);
     const gph = E.goldPerHour(S, tw);
+    const wallRow = $('ledger').querySelector('.bld[data-b="wall"]');
+    if (wallRow) wallRow.hidden = !!tw.start;               // startbyn kan inte ha mur
     for (const b of BLD) {
+      if (b.key === 'wall' && tw.start) continue;
       const f = rows[b.key], L = tw.buildings[b.key], def = c.buildings[b.key];
       setText(f.lvl, L > 0 ? TR('Nivå ') + L : TR('Ej byggd'));
       const max = E.atMax(def, L);
@@ -4863,7 +4905,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     const info = t.owner === ME ? null : E.visibleTroops(S, ME, idx);
     const mins = E.dist(t, S.tiles[src.idx]) / S.cfg.marchFieldsPerMinute;
     const expect = t.owner || !E.isObjective(t) ? 0 : Math.ceil(mins) * E.nextSpawnChance(S);
-    const aM = E.attackVec(S, p, src), dM = E.defenseMult(S, owner);
+    // Muren syns utifrån och räknas med i prognosen mot en by.
+    const aM = E.attackVec(S, p, src), dM = E.defenseMult(S, owner) + (t.type === 'village' ? E.wallBonus(S, S.towns[idx]) : 0);
     const dFlat = owner && E.isObjective(t) ? E.wireBonus(S, owner) : 0;   // taggtråden syns på kartan
     const avail = nonScouts(src.hu);
     let need = null, safe = null;
@@ -4973,7 +5016,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         if (sourceTowns(ui.sel).length) html += sendHTML(TR('Flytta trupper hit')) + '<p class="incoming" id="sh-inc" hidden></p>';
       } else if (t.type === 'village' && here && !here.start) {
         const o = S.players[t.owner];
-        html += TR('<p class="lede">En by som ') + esc(pname(o)) + TR(' har grundat. Den går att anfalla: besegrar du försvararna tar de överlevande med sig guld och mat, lika mycket som deras grundanfall.</p>') +
+        html += TR('<p class="lede">En by som ') + esc(pname(o)) + TR(' har grundat. Den går att anfalla: besegrar du försvararna tar de överlevande med sig guld och mat, tre gånger deras grundanfall.</p>') +
           TR('<dl class="facts"><div><dt>Försvarare</dt><dd id="sh-def"></dd></div><div><dt>Förråd</dt><dd id="sh-store"></dd></div>') +
           TR('<div><dt>Marsch</dt><dd id="sh-travel"></dd></div><div><dt>Vinstpoäng</dt><dd>') + fmt(E.vp(o)) + '</dd></div></dl>' +
           sendHTML(TR('Anfall')) + '<p class="incoming" id="sh-inc" hidden></p>';
@@ -5009,16 +5052,26 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   // i stället för uppåt. Då hoppar inte knapparna när prognosen blir längre.
   function placeSheet(reset) {
     const el = $('sheet');
-    if (!ui.desk || el.hidden) { el.style.top = el.style.bottom = el.style.maxHeight = ''; return; }
+    if (el.hidden) { el.style.top = el.style.bottom = el.style.maxHeight = ''; return; }
+    if (!reset && el.style.top) return;
+    // Panelens ram ligger helt still medan samma ruta är vald (både dator och mobil): överkant och
+    // nederkant låses när den öppnas, med lite luft att växa i. Blir innehållet längre rullar det inne
+    // i panelen, så knapparna flyttar sig aldrig under muspekaren eller fingret.
     const H = $('view-map').clientHeight;
-    if (reset || !el.style.top) {
-      el.style.top = el.style.bottom = el.style.maxHeight = '';
-      const h = el.offsetHeight;
-      el.style.top = Math.max(146, H - 16 - h - 110) + 'px';
-      el.style.bottom = 'auto';
-    }
-    el.style.maxHeight = Math.max(160, H - parseFloat(el.style.top) - 16) + 'px';
+    el.style.top = el.style.bottom = el.style.maxHeight = '';
+    const h = el.offsetHeight;
+    let top;
+    if (ui.desk) {
+      // Helst under zoomknapparna (146 px) med plats att växa; på låga skärmar får panelen gå högre.
+      const free = H - 16 - h;
+      top = free - 110 >= 146 ? free - 110 : free >= 146 ? 146 : Math.max(16, free - 40);
+    } else top = Math.max(Math.round(H * 0.26), H - h - 70);
+    const gap = ui.desk ? 16 : 0;
+    el.style.top = top + 'px';
+    el.style.bottom = gap + 'px';
+    el.style.maxHeight = 'none';
   }
+
   // ---------- Sänd vidare: förstärkning från ett eget objektiv till ett annat ----------
   // Välj trupper ur garnisonen och tryck sedan på målet på kartan. Trupperna anfaller aldrig.
   function renderFwd(el) {
@@ -5217,6 +5270,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       else if (n.info) def = '<b>~' + n.info.total + '</b> <span class="muted">' + ago(n.info.t) + '</span><br><span class="muted">' + unitList(n.info.u, TR('inga')) + '</span>';
       else def = TR('<b>Okänt</b>');
       if (rivalTile && n.dFlat) def += TR('<br><span class="muted">Taggtråd: +') + n.dFlat + TR(' i försvar</span>');
+      if (rivalTile && isTown && here && here.buildings.wall) def += '<br><span class="muted">' + TR('Mur nivå ') + here.buildings.wall + ' (+' + Math.round(E.wallBonus(S, here) * 100) + ' %)</span>';
       $('sh-def').innerHTML = def;
     }
     if (isTown && rivalTile) {
@@ -5576,11 +5630,14 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   // En sida i stridsrapporten. u = trupper före striden, loss = förluster, hide = okänt.
   function sideHTML(label, u, pow, base, loss, hide, neutral) {
     if (hide) return '<div class="rep-side"><span class="eyebrow">' + label + TR('</span><span><b>?</b> okänt</span><span class="muted">Ingen kom tillbaka och berättade.</span></div>');
-    const bonus = round1(pow - base);
-    return '<div class="rep-side"><span class="eyebrow">' + label + '</span>' +
-      '<span>' + (neutral ? '<b>' + E.total(u) + TR('</b> neutrala') : unitList(u).replace(/(\d+)/g, '<b>$1</b>')) + '</span>' +
+    const bonus = round1(pow - base), lost = E.total(loss), all = E.total(u);
+    const li = n => n ? '<span class="loss-i">−' + n + '</span>' : '';
+    // En rad per trupptyp med hur många som dog, sedan summan.
+    const rows = neutral ? '<span><b>' + all + '</b>' + TR(' neutrala') + li(lost) + '</span>' :
+      KEYS.filter(k => (u[k] || 0) > 0).map(k => '<span><b>' + u[k] + '</b> ' + (u[k] === 1 ? UNITS[k].one : UNITS[k].many) + li(loss[k] || 0) + '</span>').join('');
+    return '<div class="rep-side"><span class="eyebrow">' + label + '</span>' + rows +
       '<span><b>' + nf1.format(pow) + TR('</b> poäng') + (bonus > 0 ? ' (+' + nf1.format(bonus) + ')' : '') + '</span>' +
-      '<span class="loss">−' + E.total(loss) + (E.total(loss) && KEYS.filter(k => loss[k]).length > 1 ? ' <small>(' + unitList(loss) + ')</small>' : '') + '</span></div>';
+      '<span class="loss-sum">' + (lost ? TR('Förlorade: ') + lost + TR(' av ') + all : TR('Inga förluster')) + '</span></div>';
   }
   function reportHTML(e) {
     const tclock = '<span class="rep-t">' + clock(e.t) + '</span>';
@@ -6220,7 +6277,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     set(v) { try { rj.st().setItem(REJOIN_KEY, JSON.stringify(v)); } catch (e) { /* ingen lagring */ } },
     del() { try { rj.st().removeItem(REJOIN_KEY); } catch (e) { /* ingen lagring */ } },
   };
-  if (/[?&]debug\b/.test(location.search)) window.GP_DEBUG = () => ({ S, NET, ME, E });
+  if (/[?&]debug\b/.test(location.search)) window.GP_DEBUG = () => ({ S, NET, ME, E, cam, pickTile: i => { ui.fwd = null; selectTile(i); } });
   const clean = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
   const lastLogId = () => S.log.length ? S.log[S.log.length - 1].id : 0;
   function loadScript(src) {
@@ -6868,7 +6925,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       TR('Kasernen och verkstaden går upp till nivå ') + c.buildings.barracks.max + TR('. Från nivå ') + c.buildings.barracks.steepFrom + TR(' blir varje nivå ') + Math.round((c.buildings.barracks.steepGrowth - 1) * 100) + TR(' % dyrare än förra. Kasernen tränar trupper, ') + c.soldierTrainSeconds + TR(' s per trupp på nivå 1. Alla trupper äter <b>1 mat i timmen</b> från byn de tillhör. Tar maten slut lämnar trupper byn.'),
       TR('<b>Soldat</b>: anfall ') + n1(u.soldier.atk) + TR(', försvar ') + n1(u.soldier.def) + ', ' + u.soldier.cost + TR(' guld. I <b>forskningscentret</b> (') + c.buildings.lab.costList.join('/') + TR(' guld för nivå 1–') + c.buildings.lab.costList.length + TR(') låser du upp nya trupper för ') + u.berserker.unlockCost + TR(' guld styck: <b>Berserker</b> (nivå 1) anfall ') + n1(u.berserker.atk) + TR(', försvar ') + n1(u.berserker.def) + TR('. <b>Sköldgrabb</b> (nivå 2) anfall ') + n1(u.shield.atk) + TR(', försvar ') + n1(u.shield.def) + TR('. <b>Scout</b> (nivå 3) anfall ') + n1(u.scout.atk) + TR(', försvar ') + n1(u.scout.def) + TR(', spaning ') + n1(u.scout.scout) + TR('. De nya kostar ') + u.berserker.cost + TR(' guld att träna.'),
       TR('På nivå ') + u.settler.lab + TR(' kan kasernen träna en <b>utvandrare</b> för ') + u.settler.cost + TR(' guld, högst en per by. Skicka den till en tom ruta så blir rutan en <b>ny by</b> med egna byggnader, egen produktion och eget förråd (den börjar med ') + c.newTownGold + TR(' guld och ') + c.newTownFood + TR(' mat). Utvandrare strider inte, försvarar inte och kan inte skickas med andra trupper.'),
-      TR('Startbyn kan inte anfallas, men <b>nya byar kan det</b>. Trupperna hemma försvarar byn. Vinner anfallaren tar de överlevande med sig guld och mat lika mycket som deras grundanfall, fördelat efter vad som finns i byns förråd: 9 soldater mot ett förråd med 20 guld och 10 mat tar hem 6 guld och 3 mat.'),
+      TR('Startbyn kan inte anfallas, men <b>nya byar kan det</b>. Trupperna hemma försvarar byn. Vinner anfallaren tar de överlevande med sig guld och mat, <b>tre gånger</b> deras grundanfall, fördelat efter vad som finns i byns förråd: 9 soldater mot ett förråd med 30 guld och 15 mat tar hem 18 guld och 9 mat.'),
+      TR('<b>Mur</b>: i byar som inte är startbyar kan du bygga en mur. Varje nivå ger byns försvarare +') + Math.round((c.wallBonusPerLevel || 0) * 100) + TR(' % i försvar när byn anfalls. Muren syns för andra spelare.'),
       TR('Varje trupp tillhör en by. Flyttar du trupper till en annan av dina byar tillhör de sedan den byn och får dess verkstadsbonus. Erfarenhet, nivåer och färdigheter gäller alla dina byar.'),
       TR('Kartan är ') + c.mapSize + '×' + c.mapSize + TR(' rutor. Guldgruvor ger +') + Math.round(c.goldMineGoldBonus * 100) + TR(' % guld, skogar +') + Math.round(c.forestFoodBonus * 100) + TR(' % mat (i alla dina byar) och monument <b>') + c.vpPerMonumentPerMinute + TR(' vinstpoäng per minut</b>.'),
       TR('Guldgruvor och skogar börjar med ') + c.mineStartTroops + TR(' försvarare, monument med ') + c.monumentStartTroops + TR('. Neutrala soldater dyker upp på objektiven: ') + Math.round(c.spawnBaseChance * 100) + TR(' % chans per minut, och chansen ökar med ') + n1(c.spawnChancePerMinute * 100) + TR(' procentenheter för varje spelad minut. Neutrala blir högst ') + c.tileCap.mine + TR(' på en guldgruva eller skog och högst ') + c.tileCap.monument + TR(' på ett monument. Du själv kan ha hur många trupper som helst på dina objektiv. Erövrade objektiv får inga nya neutrala.'),
