@@ -829,6 +829,10 @@ button.stat:hover { background: var(--slab-3); }
   .where-coord { display: none; }
   .hud { grid-template-columns: 0 minmax(150px, 1fr) minmax(400px, 2fr) auto auto; }
 }
+.tally.stats .good b { color: var(--moss); }
+.tally.stats .bad b { color: var(--bad); }
+.obj-acts { display: flex; gap: 6px; }
+.obj-acts .btn { min-height: 34px; padding: 6px 10px; font-size: 14px; }
 
 </style>
 </head>
@@ -965,6 +969,7 @@ button.stat:hover { background: var(--slab-3); }
   <section class="view side" id="view-reports" aria-label="Rapporter" hidden>
     <div class="side-inner">
       <div class="v-head"><h2 class="h2">Rapporter</h2></div>
+      <div class="stack"><h3 class="eyebrow">Statistik hittills</h3><div class="tally stats" id="statsBox"></div></div>
       <div class="reports" id="reports"></div>
     </div>
   </section>
@@ -4143,16 +4148,18 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   // Välj trupper ur garnisonen och tryck sedan på målet på kartan. Trupperna anfaller aldrig.
   function renderFwd(el) {
     const f = ui.fwd, from = S.tiles[f.from];
-    const sig = 'fwd|' + f.from + '|' + f.to;
+    const sig = 'fwd|' + f.from;
     if (sig !== ui.sheetSig) {
       ui.sheetSig = sig; ui.fwdSig = '';
       el.innerHTML = '<div class="sheet-head"><div class="bld-ic">' + icon(TYPES[from.type].icon) + '</div>' +
           '<div><h3>Sänd vidare</h3><span class="coord">från ' + esc(TYPES[from.type].name.toLowerCase()) + ' ' + coord(from) + '</span></div>' +
           '<button class="icon-btn" type="button" data-act="fwd-cancel" aria-label="Avbryt">' + icon('i-close') + '</button></div>' +
+        '<div class="from-row"><label for="fwdTo">Till</label><select class="select" id="fwdTo"></select></div>' +
         '<div class="urows" id="fwdRows"></div>' +
         '<p class="fwd-hint" id="fwdInfo"></p>' +
         '<div class="row"><button class="btn" type="button" data-act="fwd-cancel">Avbryt</button><button class="btn primary" type="button" data-act="fwd-send" id="fwdSend">Skicka</button></div>';
       el.hidden = false;
+      $('fwdTo').addEventListener('change', e => { if (ui.fwd) { ui.fwd.to = +e.target.value; updateFwd(); } });
       updateFwd();
       placeSheet(true);
       clampCam();
@@ -4199,22 +4206,49 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       if (document.activeElement !== inp) inp.value = String(f.u[k]);
       setText($('fhave-' + k), ' av ' + from.u[k]);
     });
+    // Målen i listan: egna objektiv först, sedan egna byar, närmast först.
+    const ds = fwdTargets(f.from), sel = $('fwdTo');
+    const osig = f.to + '|' + ds.join(',');
+    if (sel.dataset.sig !== osig) {
+      sel.dataset.sig = osig;
+      const opt = i => { const t = S.tiles[i]; return '<option value="' + i + '">' + esc(t.type === 'village' ? townName(i) : TYPES[t.type].name) + ' ' + coord(t) + ' · ' + dur(E.travelMs(S, f.from, i) / E.sendSpeed(S, me(), i)) + '</option>'; };
+      const objs = ds.filter(i => S.tiles[i].type !== 'village'), towns = ds.filter(i => S.tiles[i].type === 'village');
+      sel.innerHTML = (f.to < 0 ? '<option value="-1">Välj mål …</option>' : '') +
+        (objs.length ? '<optgroup label="Dina objektiv">' + objs.map(opt).join('') + '</optgroup>' : '') +
+        '<optgroup label="Dina byar">' + towns.map(opt).join('') + '</optgroup>';
+    }
+    if (document.activeElement !== sel) sel.value = String(f.to);
     const n = E.total(f.u);
     let info;
-    if (f.to < 0) info = '<b>Tryck på kartan</b> på det av dina objektiv eller byar som trupperna ska till. De markerade rutorna går att välja. Trupperna förstärker bara, de anfaller aldrig.';
+    if (f.to < 0) info = 'Välj mål i listan, eller tryck på ett av dina objektiv eller byar på kartan. Trupperna förstärker bara, de anfaller aldrig.';
     else if (S.tiles[f.to].type === 'village') {
       const tw = S.towns[f.to];
       info = 'Mål: <b>' + esc(tw.name) + ' ' + coord(S.tiles[f.to]) + '</b> (din by). Framme om <b>' + dur(E.travelMs(S, f.from, f.to)) + '</b> (' + rutor(E.dist(from, S.tiles[f.to])) + '). ' +
-        'Trupperna flyttar in och tillhör sedan den byn, med dess verkstadsbonus. Tryck på en annan ruta för att byta mål.';
+        'Trupperna flyttar in och tillhör sedan den byn, med dess verkstadsbonus.';
     } else {
       const t = S.tiles[f.to], spd = E.sendSpeed(S, me(), f.to);
       info = 'Mål: <b>' + esc(TYPES[t.type].name) + ' ' + coord(t) + '</b>, där ' + (t.troops ? trupper(t.troops) + ' står' : 'ingen står') + '. Framme om <b>' + dur(E.travelMs(S, f.from, f.to) / spd) + '</b> (' + rutor(E.dist(from, t)) + ')' + (spd > 1 ? ', snabb förstärkning' : '') +
-        '. Hinner rutan bli någon annans går trupperna hem i stället. Tryck på en annan ruta för att byta mål.';
+        '. Hinner rutan bli någon annans går trupperna hem i stället. Du kan också välja mål genom att trycka på kartan.';
     }
     $('fwdInfo').innerHTML = info;
     const btn = $('fwdSend');
     btn.disabled = f.to < 0 || n < 1;
-    setText(btn, f.to < 0 ? 'Välj mål på kartan' : n < 1 ? 'Välj trupper' : 'Skicka ' + unitShort(f.u));
+    setText(btn, f.to < 0 ? 'Välj mål' : n < 1 ? 'Välj trupper' : 'Skicka ' + unitShort(f.u));
+  }
+  function fwdTargets(from) {
+    const out = [];
+    S.tiles.forEach((t, i) => { if (i !== from && t.owner === ME && (E.isObjective(t) || t.type === 'village')) out.push(i); });
+    return out.sort((a, b) => E.travelMs(S, from, a) - E.travelMs(S, from, b));
+  }
+  // Starta "Sänd vidare" med alla trupper valda och närmaste egna objektiv som mål (annars närmaste by).
+  function startFwd(idx) {
+    const t = S.tiles[idx];
+    if (!t || t.owner !== ME || !E.isObjective(t) || t.troops < 1) return;
+    const ds = fwdTargets(idx), objs = ds.filter(i => S.tiles[i].type !== 'village');
+    ui.fwd = { from: idx, u: E.U(t.u), to: objs.length ? objs[0] : ds.length ? ds[0] : -1 };
+    ui.sheetSig = ''; ui.fwdSig = '';
+    renderSheet();
+    ensureVisible(idx);
   }
   // Rader med en stegräknare per trupptyp som finns hemma i avsändarbyn (utvandrare går för sig).
   document.addEventListener('change', e => {
@@ -4561,7 +4595,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
         html += '<div class="list">' + owned.sort((a, b) => order[a[0].type] - order[b[0].type]).map(([t, i]) =>
           '<div class="item">' + icon(TYPES[t.type].icon) +
             '<div class="t"><button class="linkish" type="button" data-act="goto" data-tile="' + i + '">' + TYPES[t.type].name + ' ' + coord(t) + '</button><small>' + gives(t) + ' · ' + (t.troops ? unitList(t.u) : 'tom') + '</small></div>' +
-            (t.troops > 0 ? '<button class="btn" type="button" data-act="recall" data-n="all" data-tile="' + i + '">Kalla hem</button>' : '<span></span>') +
+            (t.troops > 0 ? '<span class="obj-acts"><button class="btn" type="button" data-act="fwd-from" data-tile="' + i + '">Sänd vidare</button><button class="btn" type="button" data-act="recall" data-n="all" data-tile="' + i + '">Kalla hem</button></span>' : '<span></span>') +
           '</div>').join('') + '</div>';
       }
       html += '</div>';
@@ -4769,6 +4803,14 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     if (stay) return trupper(stay) + ' stannar' + (home > 0 ? ', ' + home + ' går hem.' : ' kvar.');
     return (home > 0 ? trupper(home) + ' går hem. ' : '') + 'Skicka förstärkning för att hålla den.';
   }
+  function renderStats() {
+    const st = me().stats;
+    const items = [[st.killed, 'dödade', 'good'], [st.lost, 'förlorade', 'bad'], [st.battles, 'strider'], [st.trained, 'tränade'],
+      [st.captured, 'erövrade rutor'], [st.plundered || 0, 'plundrat']];
+    if (st.deserted) items.push([st.deserted, 'lämnade vid matbrist', 'bad']);
+    const html = items.map(([v, l, c]) => '<div' + (c ? ' class="' + c + '"' : '') + '><b>' + fmt(v) + '</b><span>' + l + '</span></div>').join('');
+    if (html !== ui.statsSig) { ui.statsSig = html; $('statsBox').innerHTML = html; }
+  }
   function renderReports() {
     const last = S.log[S.log.length - 1];
     const sig = S.log.length + ':' + (last ? last.id + ':' + (last.n || 0) : 0);
@@ -4845,6 +4887,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     if (!$('view-troops').hidden) renderTroops();
     if (!$('view-skills').hidden) renderSkills();
     if (reportsVisible()) {
+      renderStats();
       if (force) ui.reportsSig = '';
       renderReports();
       const last = S.log[S.log.length - 1];
@@ -5172,13 +5215,15 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
         break;
       }
       case 'close-stand': $('ov-stand').hidden = true; break;
-      case 'fwd-start': {
-        const t = S.tiles[ui.sel];
-        if (!t || t.owner !== ME || !E.isObjective(t) || t.troops < 1) break;
-        ui.fwd = { from: ui.sel, u: E.U(t.u), to: -1 };
-        ui.sheetSig = ''; ui.fwdSig = '';
-        renderSheet();
-        ensureVisible(ui.fwd.from);
+      case 'fwd-start': startFwd(ui.sel); break;
+      case 'fwd-from': {
+        const idx = +b.dataset.tile;
+        ui.fwd = null;
+        if (!ui.desk) setTab('map');
+        ui.sel = -1;
+        selectTile(idx);
+        centerOn(idx);
+        startFwd(idx);
         break;
       }
       case 'fwd-cancel': ui.fwd = null; ui.sheetSig = ''; renderSheet(); break;
