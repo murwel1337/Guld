@@ -785,6 +785,23 @@ button.stat:hover { background: var(--slab-3); }
 .ship .train { grid-column: auto; }
 .warn-inline { color: var(--bad); }
 
+/* Online: lobby och anslutning */
+#ov-online .card { max-width: 520px; }
+.on-sec { display: grid; gap: 10px; padding-top: 14px; border-top: 1px solid var(--seam); }
+.on-sec .ov-head .muted { font: 600 13px var(--f-num); letter-spacing: .02em; }
+#onList .item .btn { min-height: 36px; }
+#onList .item b { font-weight: 700; }
+.stand > .tag { justify-self: end; margin: 0; }
+.stand.slot { background: transparent; border: 1px dashed var(--seam); }
+.stand.slot .dot { background: transparent; border: 1.5px dashed var(--seam); }
+.stand.slot .who { color: var(--ink-faint); font-weight: 600; }
+.speed-tag:disabled { cursor: default; opacity: .75; }
+.stand .who .off { color: var(--bad); }
+.seg.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.seg.three button { font: 600 15px var(--f-body); }
+.stand-end { justify-self: end; display: flex; align-items: center; gap: 6px; }
+.stand-end .tag { margin: 0; }
+
 </style>
 </head>
 <body>
@@ -962,6 +979,11 @@ button.stat:hover { background: var(--slab-3); }
       <p class="hint" id="rivalHint">Två bottar tävlar om monumenten, försvarar sina rutor och anfaller både dig och varandra.</p>
     </div>
     <button class="btn wide" data-act="new" id="newBtn">Starta nytt spel</button>
+    <button class="btn wide" data-act="online" id="onlineBtn">Spela online med vänner</button>
+    <div class="stack" id="oContinueBox" hidden>
+      <button class="btn wide" data-act="on-resume" id="oContinueBtn">Fortsätt onlinespelet som värd</button>
+      <p class="hint" id="oContinueInfo"></p>
+    </div>
     <details>
       <summary>Så spelar du</summary>
       <ul class="rules" id="rulesStart"></ul>
@@ -992,8 +1014,8 @@ button.stat:hover { background: var(--slab-3); }
 <div class="overlay" id="ov-pause" hidden>
   <div class="card">
     <h2 class="h2">Pausat</h2>
-    <p class="lede">Tiden står still tills du fortsätter.</p>
-    <button class="btn primary wide" data-act="resume">Fortsätt</button>
+    <p class="lede" id="pauseText">Tiden står still tills du fortsätter.</p>
+    <button class="btn primary wide" data-act="resume" id="resumeBtn">Fortsätt</button>
   </div>
 </div>
 
@@ -1007,11 +1029,11 @@ button.stat:hover { background: var(--slab-3); }
       <ul class="rules" id="rulesMenu"></ul>
     </details>
     <div class="confirm" id="confirmNew" hidden>
-      <p>Det pågående spelet försvinner. Vill du börja om?</p>
-      <div class="row"><button class="btn" data-act="cancel-new">Avbryt</button><button class="btn primary" data-act="really-new">Börja om</button></div>
+      <p id="confirmText">Det pågående spelet försvinner. Vill du börja om?</p>
+      <div class="row"><button class="btn" data-act="cancel-new">Avbryt</button><button class="btn primary" data-act="really-new" id="reallyNew">Börja om</button></div>
     </div>
     <button class="btn wide ghost" data-act="ask-new" id="askNew">Nytt spel</button>
-    <p class="hint">Spelet sparas automatiskt i den här webbläsaren. Tiden går bara när spelet är öppet.</p>
+    <p class="hint" id="menuHint">Spelet sparas automatiskt i den här webbläsaren. Tiden går bara när spelet är öppet.</p>
   </div>
 </div>
 
@@ -1021,7 +1043,68 @@ button.stat:hover { background: var(--slab-3); }
     <h2 class="title" id="winTitle">Seger!</h2>
     <p class="lede" id="winText"></p>
     <div class="win-stats" id="winStats"></div>
-    <div class="row"><button class="btn" data-act="close-win">Visa kartan</button><button class="btn primary" data-act="ask-new-win">Spela igen</button></div>
+    <div class="row"><button class="btn" data-act="close-win">Visa kartan</button><button class="btn primary" data-act="ask-new-win" id="winAgain">Spela igen</button></div>
+  </div>
+</div>
+
+<div class="overlay solid" id="ov-online" hidden>
+  <div class="card">
+    <div class="ov-head"><h2 class="h2" id="onTitle">Spela online</h2><button class="icon-btn" type="button" data-act="on-back" aria-label="Tillbaka"><svg><use href="#i-close"/></svg></button></div>
+    <p class="warn" id="onErr" hidden></p>
+    <div class="stack" id="onBrowse">
+      <div class="field"><label for="onName">Ditt namn</label><input class="text-input" id="onName" maxlength="16" autocomplete="off" enterkeyhint="done"></div>
+      <div class="field"><label for="onVillage">Din by</label><input class="text-input" id="onVillage" maxlength="24" autocomplete="off" enterkeyhint="done"></div>
+      <section class="on-sec">
+        <div class="ov-head"><h3 class="eyebrow">Lobbyer att gå med i</h3><span class="muted" id="onStatus"></span></div>
+        <div class="list" id="onList"></div>
+      </section>
+      <section class="on-sec">
+        <h3 class="eyebrow">Skapa en lobby</h3>
+        <div class="field"><label for="onLobbyName">Lobbyns namn</label><input class="text-input" id="onLobbyName" maxlength="30" autocomplete="off" placeholder="Till exempel Fredagsfejden"></div>
+        <div class="field">
+          <span class="label" id="onSpeedLabel">Hastighet</span>
+          <div class="seg" role="group" aria-labelledby="onSpeedLabel" id="onSpeedSeg">
+            <button type="button" data-lspeed="1" aria-pressed="true">1×</button>
+            <button type="button" data-lspeed="2" aria-pressed="false">2×</button>
+            <button type="button" data-lspeed="5" aria-pressed="false">5×</button>
+            <button type="button" data-lspeed="10" aria-pressed="false">10×</button>
+          </div>
+        </div>
+        <button class="btn primary wide" type="button" data-act="on-host">Skapa lobby</button>
+      </section>
+      <p class="hint" id="onNote"></p>
+    </div>
+    <div class="stack" id="onRoom" hidden>
+      <p class="lede" id="onRoomInfo"></p>
+      <div class="standings" id="onPlayers"></div>
+      <div class="field" id="onBotRow">
+        <span class="label" id="onBotLabel">Lägg till bot</span>
+        <div class="seg three" role="group" aria-labelledby="onBotLabel">
+          <button type="button" data-act="on-addbot" data-level="easy">Lätt</button>
+          <button type="button" data-act="on-addbot" data-level="normal">Normal</button>
+          <button type="button" data-act="on-addbot" data-level="hard">Svår</button>
+        </div>
+      </div>
+      <div class="field">
+        <span class="label" id="onRoomSpeedLabel">Hastighet</span>
+        <div class="seg" role="group" aria-labelledby="onRoomSpeedLabel" id="onRoomSeg">
+          <button type="button" data-lspeed="1" aria-pressed="true">1×</button>
+          <button type="button" data-lspeed="2" aria-pressed="false">2×</button>
+          <button type="button" data-lspeed="5" aria-pressed="false">5×</button>
+          <button type="button" data-lspeed="10" aria-pressed="false">10×</button>
+        </div>
+      </div>
+      <p class="hint" id="onRoomHint"></p>
+      <div class="row"><button class="btn" type="button" data-act="on-leave">Lämna lobbyn</button><button class="btn primary" type="button" data-act="on-start" id="onStartBtn">Starta spelet</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="ov-lost" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="lostTitle">
+    <h2 class="h2" id="lostTitle">Frånkopplad</h2>
+    <p class="lede" id="lostText"></p>
+    <div class="row"><button class="btn" type="button" data-act="on-quit">Till startskärmen</button><button class="btn primary" type="button" data-act="on-rejoin" id="rejoinBtn">Återanslut</button></div>
   </div>
 </div>
 
@@ -1159,6 +1242,7 @@ const Engine = (function () {
       hard:   { thinkSeconds: 8,  raidFrom: 3,  margin: [1, 4], allIn: 0.25, maxAttacks: 4, harassEvery: 3, research: true,  lab: true,  defend: true,  expandFrom: 25, maxTowns: 2, goldBonus: 1.3 },
     },
     rivalColors: [['#3b6fb6', '#74a3e8'], ['#8a4bb3', '#c08ae6']],
+    playerColors: [['#b43a2c', '#e0624f'], ['#3b6fb6', '#74a3e8'], ['#8a4bb3', '#c08ae6'], ['#2f8a6e', '#5cc7a3']],  // online
     rivalVillageNames: ['Ödegården', 'Kråkvik', 'Granbacka', 'Svartsjö', 'Björkudden', 'Ulvhäll', 'Älvnäs', 'Stenbrott'],
     newTownNames: ['Sjöhaga', 'Ekbacken', 'Lillåsen', 'Norrgården', 'Västanby', 'Granlid', 'Källviken', 'Myrbacka', 'Hällestad', 'Tallåsen', 'Bäckaby', 'Rönnliden'],
   };
@@ -1291,19 +1375,21 @@ const Engine = (function () {
     const cfg = JSON.parse(JSON.stringify(opts.config || CONFIG));
     const seed = (opts.seed != null ? opts.seed : Math.floor(Math.random() * 2147483647)) | 0;
     const rival = opts.rival === undefined ? 'normal' : opts.rival;
-    const nRivals = rival ? (opts.rivalCount != null ? opts.rivalCount : cfg.rivalCount) : 0;
+    // Online: opts.humans = [{ name, villageName, bot? }, …] (högst 4). Värden är p1; bottar körs av värden.
+    const humans = opts.humans ? opts.humans.slice(0, 4) : null;
+    const nRivals = humans ? 0 : rival ? (opts.rivalCount != null ? opts.rivalCount : cfg.rivalCount) : 0;
     const N = cfg.mapSize;
     const s = {
       v: 9, cfg, seed, rng: seed, time: 0, nextSpawnAt: MINUTE,
       tiles: [], towns: {}, players: {}, order: [], armies: [], caravans: [], log: [],
-      nextId: 1, winner: null, endedAt: null,
+      nextId: 1, winner: null, endedAt: null, online: !!humans,
     };
     for (let y = 0; y < N; y++) {
       for (let x = 0; x < N; x++) {
         s.tiles.push({ x, y, type: 'grass', owner: null, u: U(), troops: 0, g: {}, look: Math.floor(rand(s) * 1000) });
       }
     }
-    const villages = placeVillages(s, 1 + nRivals);
+    const villages = placeVillages(s, humans ? humans.length : 1 + nRivals);
     villages.forEach(i => { s.tiles[i].type = 'village'; });
 
     const rest = [];
@@ -1333,6 +1419,17 @@ const Engine = (function () {
       syncTile(t);
       k++;
     }
+    if (humans) {
+      const taken = new Set();
+      humans.forEach((h, i) => {
+        let vn = String(h.villageName || '').trim().slice(0, 24) || ('By ' + (i + 1));
+        for (let n = 2; taken.has(vn.toLowerCase()); n++) vn = String(h.villageName).slice(0, 21) + ' ' + n;
+        taken.add(vn.toLowerCase());
+        const col = cfg.playerColors[i % cfg.playerColors.length];
+        addPlayer(s, 'p' + (i + 1), { name: String(h.name || 'Spelare ' + (i + 1)).slice(0, 16), villageName: vn, color: col[0], hi: col[1], bot: h.bot || null }, villages[i]);
+      });
+      return s;
+    }
     addPlayer(s, 'p1', { name: opts.playerName || 'Du', villageName: opts.villageName, color: '#b43a2c', hi: '#e0624f' }, villages[0]);
     const names = cfg.rivalVillageNames.slice();
     for (let r = 0; r < nRivals; r++) {
@@ -1348,10 +1445,18 @@ const Engine = (function () {
     const N = s.cfg.mapSize, want = s.cfg.rivalMinDistance;
     const pickTile = () => (1 + Math.floor(rand(s) * (N - 2))) * N + 1 + Math.floor(rand(s) * (N - 2));
     if (n === 1) return [pickTile()];
+    // Online med 3–4 spelare: en by per kvadrant, så att alla får ungefär lika långt till varandra.
+    const quad = s.online && n >= 3;
+    const inQuad = q => {
+      const w = Math.floor(N / 2) - 4, lo = 1, hi = N - 1 - w;
+      const x = (q & 1 ? hi : lo) + Math.floor(rand(s) * w), y = (q & 2 ? hi : lo) + Math.floor(rand(s) * w);
+      return y * N + x;
+    };
     let best = null, bestScore = -Infinity;
     for (let tries = 0; tries < 800; tries++) {
       const vs = [];
-      for (let k = 0; k < n; k++) vs.push(pickTile());
+      const qs = [0, 1, 2, 3].sort(() => rand(s) - 0.5);
+      for (let k = 0; k < n; k++) vs.push(quad ? inQuad(qs[k]) : pickTile());
       let mn = Infinity, mx = 0;
       for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
         const d = dist(s.tiles[vs[i]], s.tiles[vs[j]]);
@@ -2482,8 +2587,85 @@ const Engine = (function () {
     return !!(s && s.v >= 6 && s.v <= 9 && s.cfg && Array.isArray(s.tiles) && s.towns && s.players && s.order && s.tiles.length === s.cfg.mapSize * s.cfg.mapSize);
   }
 
+  // =====================================================================
+  //   ONLINE: värden kör motorn och skickar varje spelare bara det den får se.
+  //   initFor()   statiskt innehåll, skickas en gång (regler, rutornas utseende)
+  //   encodeView() en kompakt vy för en spelare (dimma tillämpad, nya loggposter)
+  //   decodeView() bygger ett tillstånd med samma form som s, för gästens gränssnitt
+  // =====================================================================
+  const TYPE_CODE = { grass: 'g', mine: 'm', forest: 'f', monument: 'o', village: 'v' };
+  const CODE_TYPE = { g: 'grass', m: 'mine', f: 'forest', o: 'monument', v: 'village' };
+  const uArr = u => UNIT_KEYS.map(k => u[k] || 0);
+  const arrU = a => { const u = U(); UNIT_KEYS.forEach((k, i) => { u[k] = a[i] || 0; }); return u; };
+  function initFor(s) { return { cfg: s.cfg, look: s.tiles.map(t => t.look), seed: s.seed }; }
+  // Loggposter som rör spelaren (samma urval som rapporterna).
+  function logRelevant(s, e, pid) {
+    if (e.player === pid || e.defender === pid || e.kind === 'win' || e.kind === 'settled') return true;
+    return e.kind === 'battle' && e.captured && s.tiles[e.tile] && s.tiles[e.tile].type === 'monument';
+  }
+  function encodeView(s, pid, logFrom, max) {
+    const num = id => id ? s.order.indexOf(id) + 1 : 0;
+    let ty = '';
+    const tl = [];
+    s.tiles.forEach((t, i) => {
+      ty += TYPE_CODE[t.type];
+      if (!t.owner && !t.troops) return;
+      if (t.owner && t.owner !== pid) { tl.push([i, num(t.owner)]); return; }
+      const row = [i, num(t.owner), uArr(t.u)];
+      if (t.owner === pid && t.g) { const g = {}; for (const h in t.g) g[h] = uArr(t.g[h]); row.push(g); }
+      tl.push(row);
+    });
+    const tw = [];
+    for (const k in s.towns) {
+      const x = s.towns[k];
+      tw.push(x.owner === pid ? x : { idx: x.idx, owner: x.owner, name: x.name, start: x.start, founded: x.founded });
+    }
+    const pl = s.order.map(id => {
+      const p = s.players[id];
+      if (id === pid) { const c = Object.assign({}, p); delete c.avoid; delete c.saving; delete c.scoutedAt; return c; }
+      return { id, name: p.name, villageName: p.villageName, color: p.color, hi: p.hi, bot: p.bot, village: p.village, towns: p.towns,
+        vpMs: p.vpMs, level: p.level, skills: p.skills };
+    });
+    const ar = [];
+    for (const a of s.armies) {
+      if (a.owner === pid) ar.push(a);
+      else if (!a.scout) ar.push({ id: a.id, owner: a.owner, home: -1, sx: a.sx, sy: a.sy, from: a.from, to: a.to, u: U(), count: 0,
+        scout: false, settler: false, loot: null, depart: a.depart, arrive: a.arrive });
+    }
+    const lg = [];
+    for (const e of s.log) if (e.id > (logFrom || 0) && logRelevant(s, e, pid)) lg.push(e);
+    return { t: s.time, ns: s.nextSpawnAt, nid: s.nextId, w: s.winner, e: s.endedAt, ord: s.order, ty, tl, tw, pl, ar,
+      cv: (s.caravans || []).filter(c => c.owner === pid), lg: max ? lg.slice(-max) : lg };
+  }
+  function decodeView(init, v, prevLog) {
+    const cfg = init.cfg, N = cfg.mapSize;
+    const s = { v: 9, cfg, seed: init.seed, rng: 0, time: v.t, nextSpawnAt: v.ns, tiles: [], towns: {}, players: {}, order: v.ord.slice(),
+      armies: v.ar, caravans: v.cv, log: [], nextId: v.nid, winner: v.w, endedAt: v.e, online: true, view: true };
+    for (let i = 0; i < N * N; i++) s.tiles.push({ x: i % N, y: Math.floor(i / N), type: CODE_TYPE[v.ty[i]], owner: null, u: U(), troops: 0, g: {}, look: init.look[i] });
+    for (const r of v.tl) {
+      const t = s.tiles[r[0]];
+      t.owner = r[1] ? v.ord[r[1] - 1] : null;
+      if (r[2]) { t.u = arrU(r[2]); syncTile(t); }
+      if (r[3]) for (const h in r[3]) t.g[h] = arrU(r[3][h]);
+    }
+    for (const x of v.tw) {
+      if (x.buildings) { s.towns[x.idx] = x; continue; }
+      const full = makeTown(s, x.idx, x.owner, x.name, x.start, 0, 0);
+      full.founded = x.founded;
+      s.towns[x.idx] = full;
+    }
+    for (const p of v.pl) {
+      s.players[p.id] = Object.assign({ intel: {}, exp: 0, levelExp: 0, points: 0, nextThink: 0,
+        stats: { trained: 0, killed: 0, lost: 0, battles: 0, captured: 0, loot: 0, deserted: 0, scouted: 0, plundered: 0, towns: p.towns.length } }, p);
+    }
+    const log = (prevLog || []).concat(v.lg);
+    s.log = log.length > 400 ? log.slice(-400) : log;
+    return s;
+  }
+
   return {
     CONFIG, MINUTE, HOUR, UNIT_KEYS, ATK, DEF,
+    initFor, encodeView, decodeView, logRelevant,
     createGame, apply, step, advance, isValidSave, migrate, botThink, atMax, tileCap,
     U, total, addTo, subFrom, pick, give, onlyScouts, onlySettlers, fighters, armyUnits, townUnits, visibleTroops, defendersAt,
     town, townsOf, attackableTown, carryCapacity, plunderOf, garrisonDefMult,
@@ -2507,8 +2689,14 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
 (function () {
   'use strict';
   const E = Engine;
-  const ME = 'p1';
+  let ME = 'p1';                  // online: gästens spelare (p2–p4)
   const SAVE_KEY = 'guld-och-potatis:save:v1';
+  const OSAVE_KEY = 'guld-och-potatis:online:v1';   // värdens onlinespel
+  const REJOIN_KEY = 'guld-och-potatis:rejoin:v1';  // gästens senaste lobby (för att återansluta)
+  const NAME_KEY = 'guld-och-potatis:name:v1';
+  // Onlineläge. role: null (singleplayer), 'host' eller 'guest'. view: 'browse', 'room' eller 'game'.
+  const NET = { role: null, view: null, lobby: null, hostH: null, link: null, room: null, init: null, list: [], unwatch: null,
+    tr: null, pending: 0, pendingAt: 0, reqId: 0, lastSend: 0, on: {}, chosenSpeed: 1, lobbyId: null, joining: false, ended: false, leaving: false };
   const BEST_KEY = 'guld-och-potatis:best:v1';
   const STAY_KEY = 'guld-och-potatis:stay:v1';
   const MIN = 60000;
@@ -2588,7 +2776,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   const fightersHome = tw => E.total(tw.hu) - (tw.hu.settler || 0);
   const ago = t => { const m = Math.max(0, Math.round((S.time - t) / MIN)); return m < 1 ? 'nyss' : 'för ' + m + ' min sedan'; };
   const rivals = () => S ? S.order.filter(id => id !== ME).map(id => S.players[id]) : [];
-  const nameOf = id => S.players[id] ? S.players[id].villageName : 'En rival';
+  const pname = p => S && S.online ? p.name : p.villageName;
+  const nameOf = id => S.players[id] ? pname(S.players[id]) : 'En rival';
   const capOf = t => E.tileCap(S, t);
   const listNames = arr => arr.length < 2 ? arr.join('') : arr.slice(0, -1).join(', ') + ' och ' + arr[arr.length - 1];
   const pct = m => Math.round((m - 1) * 100);
@@ -2662,6 +2851,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
 
   // Alla handlingar går hit. Multiplayer: skicka action till värden i stället.
   function dispatch(action, quiet) {
+    if (NET.role === 'guest') return guestDispatch(action, quiet);
     const r = E.apply(S, Object.assign({ player: ME }, action));
     if (!r.ok && !quiet) toast(r.error, 'bad');
     refresh(true);
@@ -3530,6 +3720,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     const v = E.vp(p);
     setText(h.v, fmt(v));
     h.bar.style.width = (100 * v / c.vpToWin).toFixed(1) + '%';
+    h.bar.style.background = S.online ? p.hi : '';
     const rvs = rivals();
     if (rvs.length) {
       if (h.rmeters.children.length !== rvs.length) {
@@ -3538,7 +3729,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       rvs.forEach((r, i) => { h.rmeters.children[i].firstChild.style.width = (100 * E.vp(r) / c.vpToWin).toFixed(1) + '%'; });
       const sub = rvs.map(r => '<span style="color:' + r.hi + '">' + fmt(E.vp(r)) + '</span>').join(' · ');
       if (h.sub.innerHTML !== sub) h.sub.innerHTML = sub;
-      h.el.title = 'Vinstpoäng. Du: ' + fmt(v) + ' (+' + E.vpPerMinute(S, p) + '/min). ' + rvs.map(r => r.villageName + ': ' + fmt(E.vp(r)) + ' (+' + E.vpPerMinute(S, r) + '/min)').join('. ') + '.';
+      h.el.title = 'Vinstpoäng. Du: ' + fmt(v) + ' (+' + E.vpPerMinute(S, p) + '/min). ' + rvs.map(r => pname(r) + ': ' + fmt(E.vp(r)) + ' (+' + E.vpPerMinute(S, r) + '/min)').join('. ') + '.';
     } else {
       h.rmeters.innerHTML = '';
       setText(h.sub, '+' + E.vpPerMinute(S, p) + '/min');
@@ -3622,7 +3813,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   function sheetHead(t) {
     const o = t.owner ? S.players[t.owner] : null;
     const tw = t.type === 'village' ? S.towns[idxOf(t)] : null;
-    const tag = (t.owner === ME ? '<span class="tag mine">Din</span>' : o ? '<span class="tag rival" style="background:' + o.color + '">' + esc(o.villageName) + '</span>' : E.isObjective(t) ? '<span class="tag neutral">Neutral</span>' : '') +
+    const tag = (t.owner === ME ? '<span class="tag mine" style="background:' + me().color + '">Din</span>' : o ? '<span class="tag rival" style="background:' + o.color + '">' + esc(pname(o)) + '</span>' : E.isObjective(t) ? '<span class="tag neutral">Neutral</span>' : '') +
       (tw && tw.start ? '<span class="tag shield">' + icon('k-defense') + 'Skyddad</span>' : '');
     return '<div class="sheet-head"><div class="bld-ic">' + icon(TYPES[t.type].icon) + '</div>' +
       '<div><h3>' + esc(tileName(t)) + tag + '</h3><span class="coord">' + coord(t) + '</span></div>' +
@@ -3693,13 +3884,13 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
         if (sourceTowns(ui.sel).length) html += sendHTML('Flytta trupper hit') + '<p class="incoming" id="sh-inc" hidden></p>';
       } else if (t.type === 'village' && here && !here.start) {
         const o = S.players[t.owner];
-        html += '<p class="lede">En by som ' + esc(o.villageName) + ' har grundat. Den går att anfalla: besegrar du försvararna tar de överlevande med sig guld och mat, lika mycket som deras grundanfall.</p>' +
+        html += '<p class="lede">En by som ' + esc(pname(o)) + ' har grundat. Den går att anfalla: besegrar du försvararna tar de överlevande med sig guld och mat, lika mycket som deras grundanfall.</p>' +
           '<dl class="facts"><div><dt>Försvarare</dt><dd id="sh-def"></dd></div><div><dt>Förråd</dt><dd id="sh-store"></dd></div>' +
           '<div><dt>Marsch</dt><dd id="sh-travel"></dd></div><div><dt>Vinstpoäng</dt><dd>' + fmt(E.vp(o)) + '</dd></div></dl>' +
           sendHTML('Anfall') + '<p class="incoming" id="sh-inc" hidden></p>';
       } else if (t.type === 'village') {
         const o = S.players[t.owner];
-        html += '<p class="lede">' + esc(o.villageName) + ' är en rivals startby. Skölden visar att den är skyddad: startbyar går inte att anfalla, men byar som rivalen grundar senare gör det.</p>' +
+        html += '<p class="lede">' + (S.online ? esc(here ? here.name : 'Byn') + ' är startbyn för ' + esc(o.name) + '.' : esc(o.villageName) + ' är en rivals startby.') + ' Skölden visar att den är skyddad: startbyar går inte att anfalla, men byar som rivalen grundar senare gör det.</p>' +
           '<dl class="facts"><div><dt>Avstånd</dt><dd>' + rutor(E.dist(t, S.tiles[TW().idx])) + '</dd></div>' +
           '<div><dt>Vinstpoäng</dt><dd>' + fmt(E.vp(o)) + ' · ' + E.countOwned(S, o.id, 'monument') + ' monument</dd></div></dl>';
       } else if (anySettler) {
@@ -3886,8 +4077,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       }
       else if (!rivalTile) def = '<b>' + t.troops + '</b><span class="muted">/' + capOf(t) + '</span> neutrala';
       else if (n.info) def = '<b>~' + n.info.total + '</b> <span class="muted">' + ago(n.info.t) + '</span><br><span class="muted">' + unitList(n.info.u, 'inga') + '</span>';
-      if (rivalTile && n.dFlat) def += '<br><span class="muted">Taggtråd: +' + n.dFlat + ' i försvar</span>';
       else def = '<b>Okänt</b>';
+      if (rivalTile && n.dFlat) def += '<br><span class="muted">Taggtråd: +' + n.dFlat + ' i försvar</span>';
       $('sh-def').innerHTML = def;
     }
     if (isTown && rivalTile) {
@@ -3999,7 +4190,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       const towns = p.towns.length;
       const eta = rate > 0 && v < c.vpToWin ? 'Når ' + c.vpToWin + ' om ~' + Math.ceil((c.vpToWin - v) / rate) + ' min i den här takten' : rate > 0 ? '' : 'Inga monument just nu';
       return '<div class="stand ' + (mine ? 'me' : 'rival') + '"><span class="dot" style="background:' + p.color + '"></span>' +
-        '<div class="who">' + esc(mine ? 'Du · ' + p.villageName : p.villageName + ' · ' + (RIVAL_LEVELS[p.bot] || 'rival').toLowerCase()) +
+        '<div class="who">' + esc(S.online ? (mine ? 'Du' : p.name) + ' · ' + p.villageName + (p.bot ? ' · ' + (RIVAL_LEVELS[p.bot] || '').toLowerCase() : '') : mine ? 'Du · ' + p.villageName : p.villageName + ' · ' + (RIVAL_LEVELS[p.bot] || 'rival').toLowerCase()) +
+          (S.online && !mine && NET.on[id] === false ? '<small class="off">Frånkopplad</small>' : '') +
           '<small>' + E.countOwned(S, id, 'monument') + ' monument · +' + rate + '/min' + (towns > 1 ? ' · ' + towns + ' byar' : '') + '</small>' +
           (eta ? '<small class="eta">' + eta + '</small>' : '') + '</div>' +
         '<span class="pts">' + fmt(v) + '<small>/' + c.vpToWin + '</small></span>' +
@@ -4109,7 +4301,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
           const what = isTown ? 'din by ' + townName(a.to) : 'din ' + TYPES[t.type].name.toLowerCase() + ' ' + coord(t);
           const have = isTown ? fightersHome(S.towns[a.to]) + ' hemma' : t.troops + ' där';
           return '<div class="item incoming">' + icon(TYPES[t.type].icon) +
-            '<div class="t"><button class="linkish" type="button" data-act="goto" data-tile="' + a.to + '">Okänd styrka mot ' + esc(what) + '</button><small>' + esc(o.villageName) + ' · du har ' + have + '</small></div>' +
+            '<div class="t"><button class="linkish" type="button" data-act="goto" data-tile="' + a.to + '">Okänd styrka mot ' + esc(what) + '</button><small>' + esc(pname(o)) + ' · du har ' + have + '</small></div>' +
             '<span class="eta" data-eta="' + a.id + '"></span><div class="meter"><i data-prog="' + a.id + '" style="background:' + o.hi + '"></i></div></div>';
         }).join('') + '</div></div>';
       }
@@ -4255,7 +4447,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   function reportHTML(e) {
     const tclock = '<span class="rep-t">' + clock(e.t) + '</span>';
     const small = (txt, cls) => '<article class="rep small' + (cls ? ' ' + cls : '') + '"><div class="rep-head"><span>' + esc(txt) + '</span>' + tclock + '</div></article>';
-    const who = id => S.players[id] ? S.players[id].villageName : 'Rivalen';
+    const who = id => S.players[id] ? pname(S.players[id]) : 'Rivalen';
     const t = e.tile != null ? S.tiles[e.tile] : null;
     const name = t ? (t.type === 'village' ? tileName(t) : TYPES[t.type].name) + ' ' + coord(t) : '';
     const link = t ? '<h4><button class="linkish" type="button" data-act="goto" data-tile="' + e.tile + '">' + esc(name) + '</button></h4>' : '';
@@ -4434,8 +4626,16 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   // =====================================================================
   //   Spelflöde, sparning och överlägg
   // =====================================================================
-  function makeSave() { return S ? { state: S, speed, acc, savedAt: Date.now() } : null; }
-  function save() { if (S) store.set(SAVE_KEY, makeSave()); lastSave = performance.now(); }
+  function makeSave() { return S && NET.role !== 'guest' ? { state: S, speed, acc, savedAt: Date.now() } : null; }
+  function save() {
+    lastSave = performance.now();
+    if (!S || NET.role === 'guest') return;          // gästen sparar inget, värden har spelet
+    if (NET.role === 'host') {
+      if (NET.lobby && NET.lobby.started) store.set(OSAVE_KEY, Object.assign(makeSave(), { lobby: lobbySave() }));
+      return;
+    }
+    if (!S.online) store.set(SAVE_KEY, makeSave());
+  }
 
   function beginGame(state, spd, accMs) {
     S = E.migrate(state); speed = spd || 1; acc = accMs || 0;
@@ -4452,7 +4652,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     if (!$('shipWrap').children.length) buildShip();
     ui.shipOpen = false; ui.ship = { to: -1, gold: 0, food: 0 };
     ui.fwd = null;
-    ['ov-start', 'ov-pause', 'ov-menu', 'ov-win', 'ov-stand', 'ov-rename'].forEach(id => { $(id).hidden = true; });
+    ['ov-start', 'ov-pause', 'ov-menu', 'ov-win', 'ov-stand', 'ov-rename', 'ov-online', 'ov-lost'].forEach(id => { $(id).hidden = true; });
+    onlineChrome();
     ui.mapTownsSig = '';
     $('sheet').hidden = true;
     applyLayout();
@@ -4470,7 +4671,14 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   }
   function showStart() {
     running = false;
+    if (NET.role) leaveOnline();
+    ['ov-online', 'ov-lost', 'ov-pause', 'ov-menu', 'ov-win'].forEach(id => { $(id).hidden = true; });
+    paused = false;
     $('ov-start').hidden = false;
+    const os = store.get(OSAVE_KEY);
+    const oOk = os && os.lobby && E.isValidSave(os.state) && !os.state.winner;
+    $('oContinueBox').hidden = !oOk;
+    if (oOk) setText($('oContinueInfo'), os.lobby.name + ' · speltid ' + clock(os.state.time) + ' · ' + os.state.order.length + ' spelare · ' + (os.speed || 1) + '×. De andra återansluter under Spela online.');
     const sv = store.get(SAVE_KEY);
     const ok = sv && E.isValidSave(sv.state) && !sv.state.winner;
     $('continueBox').hidden = !ok;
@@ -4498,14 +4706,14 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     setText($('winTitle'), won ? 'Seger!' : 'Förlust');
     if (won) {
       const best = store.get(BEST_KEY);
-      const record = !best || !best.ms || ms < best.ms;
+      const record = !S.online && (!best || !best.ms || ms < best.ms);
       if (record) store.set(BEST_KEY, { ms, at: Date.now() });
       const rvs = rivals();
-      setText($('winText'), p.villageName + ' nådde ' + S.cfg.vpToWin + ' vinstpoäng efter ' + durWords(ms) + ' speltid' + (rvs.length ? ', före ' + listNames(rvs.map(r => r.villageName + ' (' + fmt(E.vp(r)) + ')')) + '.' : '.') + (record ? ' Det är ditt bästa resultat hittills.' : ' Bästa tid: ' + durWords(best.ms) + '.'));
+      setText($('winText'), (S.online ? 'Du' : p.villageName) + ' nådde ' + S.cfg.vpToWin + ' vinstpoäng efter ' + durWords(ms) + ' speltid' + (rvs.length ? ', före ' + listNames(rvs.map(r => pname(r) + ' (' + fmt(E.vp(r)) + ')')) + '.' : '.') + (S.online ? '' : record ? ' Det är ditt bästa resultat hittills.' : ' Bästa tid: ' + durWords(best.ms) + '.'));
     } else {
       const w = S.players[S.winner];
       const third = rivals().filter(r => r.id !== S.winner);
-      setText($('winText'), w.villageName + ' nådde ' + S.cfg.vpToWin + ' vinstpoäng efter ' + durWords(ms) + ' speltid. Du hade ' + fmt(E.vp(p)) + (third.length ? ' och ' + listNames(third.map(r => r.villageName + ' ' + fmt(E.vp(r)))) : '') + '.');
+      setText($('winText'), pname(w) + ' nådde ' + S.cfg.vpToWin + ' vinstpoäng efter ' + durWords(ms) + ' speltid. Du hade ' + fmt(E.vp(p)) + (third.length ? ' och ' + listNames(third.map(r => pname(r) + ' ' + fmt(E.vp(r)))) : '') + '.');
     }
     const st = p.stats;
     $('winStats').innerHTML = [
@@ -4514,11 +4722,16 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       [st.killed, 'besegrade'], [st.lost, 'förlorade'], [p.level, 'nivå'],
     ].map(([v, l]) => '<div><b>' + fmt(v) + '</b><span>' + l + '</span></div>').join('');
     drawPreview($('winPreview'), S, won ? p.village : S.players[S.winner].village);
+    setText($('winAgain'), S.online ? 'Till startskärmen' : 'Spela igen');
     $('ov-win').hidden = false;
     save();
   }
   function setPaused(v) {
+    if (NET.role === 'guest') return;                 // bara värden kan pausa
     paused = v;
+    NET.lastSend = 0;                                 // gästerna får veta direkt
+    setText($('pauseText'), NET.role === 'host' ? 'Spelet är pausat för alla spelare tills du fortsätter.' : 'Tiden står still tills du fortsätter.');
+    $('resumeBtn').hidden = false;
     $('ov-pause').hidden = !v;
     $('pauseBtn').innerHTML = icon(v ? 'i-play' : 'i-pause');
     $('pauseBtn').setAttribute('aria-label', v ? 'Fortsätt spelet' : 'Pausa spelet');
@@ -4529,7 +4742,13 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   function tick(now) {
     const dt = Math.max(0, now - lastReal);
     lastReal = now;
-    if (!S || !running || paused || menuOpen || S.winner) return;
+    if (NET.role === 'guest') {
+      // Gästen kör inte motorn. Klockan tickar fram mellan värdens uppdateringar så att arméerna rör sig mjukt.
+      if (S && running && !paused && !S.winner) acc = Math.min(acc + dt * speed, 3000 * speed);
+      return;
+    }
+    if (NET.role === 'host') hostBroadcast(now);
+    if (!S || !running || paused || (menuOpen && !S.online) || S.winner) return;
     acc += dt * speed;
     const step = S.cfg.stepMs;
     if (acc >= step) {
@@ -4555,8 +4774,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
 
   // ---------- Klick ----------
   document.addEventListener('click', e => {
-    const b = e.target.closest('[data-act], .tab, [data-speed], [data-rival]');
+    const b = e.target.closest('[data-act], .tab, [data-speed], [data-rival], [data-lspeed]');
     if (!b) return;
+    if (b.dataset.lspeed) { pickLobbySpeed(+b.dataset.lspeed); return; }
     if (b.dataset.speed) {
       ui.chosenSpeed = +b.dataset.speed;
       document.querySelectorAll('#tempoSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
@@ -4585,24 +4805,53 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       }
       case 'pause': setPaused(!paused); break;
       case 'speed': {
+        if (NET.role === 'guest') break;   // online bestämmer värden
         const steps = [1, 2, 5, 10];
         speed = steps[(steps.indexOf(speed) + 1) % steps.length] || 1;
         ui.chosenSpeed = speed;
         $('speedTag').setAttribute('aria-label', 'Hastighet ' + speed + '×. Klicka för att byta.');
+        if (NET.role === 'host' && NET.lobby) { NET.lobby.speed = speed; NET.lastSend = 0; roomChanged(); }
         updateHUD(); save();
         break;
       }
       case 'resume': setPaused(false); break;
-      case 'menu': menuOpen = true; $('confirmNew').hidden = true; $('askNew').hidden = false; $('ov-menu').hidden = false; save(); break;
+      case 'menu': {
+        menuOpen = true; $('confirmNew').hidden = true; $('askNew').hidden = false; $('ov-menu').hidden = false;
+        const on = S && S.online;
+        setText($('askNew'), on ? 'Lämna onlinespelet' : 'Nytt spel');
+        setText($('reallyNew'), on ? 'Lämna' : 'Börja om');
+        setText($('confirmText'), !on ? 'Det pågående spelet försvinner. Vill du börja om?' : NET.role === 'host' ?
+          'Spelet sparas så att du kan fortsätta senare som värd. Tills dess står det still och de andra kopplas bort.' :
+          'Du kan återansluta under Spela online så länge värden har spelet öppet.');
+        setText($('menuHint'), !on ? 'Spelet sparas automatiskt i den här webbläsaren. Tiden går bara när spelet är öppet.' : NET.role === 'host' ?
+          'Du är värd: spelet går bara när du har det öppet, och det sparas i den här webbläsaren.' : 'Värden kör och sparar spelet.');
+        save();
+        break;
+      }
       case 'close-menu': menuOpen = false; $('ov-menu').hidden = true; break;
       case 'sound': setSound(!sfx.on); if (sfx.on) { sfx.until = 0; playTrained(); } break;
       case 'ask-new': $('confirmNew').hidden = false; $('askNew').hidden = true; break;
       case 'cancel-new': $('confirmNew').hidden = true; $('askNew').hidden = false; break;
       case 'really-new': case 'ask-new-win':
         menuOpen = false; $('ov-menu').hidden = true; $('ov-win').hidden = true;
-        if (act === 'really-new') store.del(SAVE_KEY);
+        if (NET.role) {
+          const over = NET.role === 'host' && S && S.winner;
+          leaveOnline();
+          if (over) store.del(OSAVE_KEY);
+        } else if (act === 'really-new') store.del(SAVE_KEY);
         showStart();
         break;
+      case 'online': openOnline(); break;
+      case 'on-back': onlineBack(); break;
+      case 'on-host': hostCreate(); break;
+      case 'on-join': guestJoin(b.dataset.id); break;
+      case 'on-start': hostStart(); break;
+      case 'on-addbot': addBot(b.dataset.level); break;
+      case 'on-rmbot': removeBot(+b.dataset.i); break;
+      case 'on-leave': leaveOnline(); openOnline(); break;
+      case 'on-resume': hostResume(); break;
+      case 'on-rejoin': rejoin(); break;
+      case 'on-quit': leaveOnline(); showStart(); break;
       case 'close-win': $('ov-win').hidden = true; setTab('map'); break;
       case 'upgrade': {
         dispatch({ type: 'upgrade', town: TW().idx, building: b.dataset.b });
@@ -4772,6 +5021,675 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     else if (ui.sel >= 0) selectTile(-1);
   });
 
+  // =====================================================================
+  //   ONLINE — lobby, anslutning och synk för 2–4 spelare.
+  //   Värden (p1) kör motorn precis som i singleplayer. Gästerna skickar
+  //   handlingar och får tillbaka en vy med dimma (Engine.encodeView).
+  //   Supabase Realtime används bara för lobbylistan (presence) och för att
+  //   koppla ihop WebRTC; sedan går allt P2P. Utan nycklar används
+  //   BroadcastChannel, som bara fungerar mellan flikar i samma webbläsare.
+  // =====================================================================
+  const ONLINE_CFG = {
+    supabaseUrl: 'https://cufpsymebblsaxtwoofs.supabase.co',
+    supabaseKey: 'sb_publishable_eyoxyRNFN4f1KOsOhJjdBQ_LGNIQ3DZ',   // publik nyckel, får synas
+    ice: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
+  };
+  const PROTO = 1, MAXP = 4, CHUNK = 15000;
+  const useLocal = () => !ONLINE_CFG.supabaseUrl || !ONLINE_CFG.supabaseKey || /[?&]lokal\b/.test(location.search);
+  function rid(n) {
+    const a = 'abcdefghjkmnpqrstuvwxyz23456789', r = crypto.getRandomValues(new Uint8Array(n));
+    let out = '';
+    for (const x of r) out += a[x % a.length];
+    return out;
+  }
+  NET.clientId = rid(10);
+  // Återanslutningen sparas per flik i lokalt läge (flera flikar i samma webbläsare är olika spelare).
+  const rj = {
+    st: () => useLocal() ? sessionStorage : localStorage,
+    get() { try { const v = rj.st().getItem(REJOIN_KEY); return v ? JSON.parse(v) : null; } catch (e) { return null; } },
+    set(v) { try { rj.st().setItem(REJOIN_KEY, JSON.stringify(v)); } catch (e) { /* ingen lagring */ } },
+    del() { try { rj.st().removeItem(REJOIN_KEY); } catch (e) { /* ingen lagring */ } },
+  };
+  if (/[?&]debug\b/.test(location.search)) window.GP_DEBUG = () => ({ S, NET, ME, E });
+  const clean = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
+  const lastLogId = () => S.log.length ? S.log[S.log.length - 1].id : 0;
+  function loadScript(src) {
+    return new Promise((res, rej) => {
+      const el = document.createElement('script');
+      el.src = src; el.onload = res; el.onerror = () => rej(new Error('Kunde inte ladda anslutningen. Kontrollera internet.'));
+      document.head.appendChild(el);
+    });
+  }
+
+  // ---------- Länk: JSON-meddelanden, delas upp i bitar över 15 kB ----------
+  function makeLink(rawSend, close, busy) {
+    const L = { open: true, onmsg: null, onclose: null, parts: {}, lastIn: Date.now(), busy: busy || (() => false) };
+    L.send = obj => {
+      if (!L.open) return;
+      const str = JSON.stringify(obj);
+      try {
+        if (str.length <= CHUNK) rawSend(str);
+        else {
+          const id = rid(6), n = Math.ceil(str.length / CHUNK);
+          for (let i = 0; i < n; i++) rawSend(JSON.stringify({ k: 'part', id, i, n, d: str.slice(i * CHUNK, (i + 1) * CHUNK) }));
+        }
+      } catch (e) { L.drop(); }
+    };
+    L.recv = str => {
+      L.lastIn = Date.now();
+      let m;
+      try { m = JSON.parse(str); } catch (e) { return; }
+      if (m.k === 'part') {
+        const p = L.parts[m.id] = L.parts[m.id] || { n: 0, d: [] };
+        if (p.d[m.i] == null) { p.d[m.i] = m.d; p.n++; }
+        if (p.n === m.n) { delete L.parts[m.id]; L.recv(p.d.join('')); }
+        return;
+      }
+      if (m.k === 'ping') { L.send({ k: 'pong' }); return; }
+      if (m.k === 'pong') return;
+      if (L.onmsg) L.onmsg(m);
+    };
+    L.drop = () => {
+      if (!L.open) return;
+      L.open = false;
+      try { close(); } catch (e) { /* redan stängd */ }
+      if (L.onclose) L.onclose();
+    };
+    return L;
+  }
+  function rtcLink(pc, dc) {
+    const L = makeLink(str => dc.send(str), () => { try { dc.close(); } catch (e) { /* */ } try { pc.close(); } catch (e) { /* */ } },
+      () => dc.bufferedAmount > 256 * 1024);
+    dc.onmessage = e => L.recv(e.data);
+    dc.onclose = () => L.drop();
+    pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed' || pc.connectionState === 'closed') L.drop(); };
+    return L;
+  }
+
+  // ---------- Transport 1: flikar i samma webbläsare (test och utan server) ----------
+  function localTransport() {
+    const bc = new BroadcastChannel('guld-och-potatis-lokal');
+    const me = NET.clientId, links = {}, seen = {};
+    let watchCb = null, hostInfo = null, onLink = null, joinWait = null;
+    const post = m => bc.postMessage(Object.assign({ from: me }, m));
+    const emit = () => {
+      if (!watchCb) return;
+      const now = Date.now();
+      for (const k in seen) if (now - seen[k].at > 5000) delete seen[k];
+      watchCb(Object.values(seen).map(x => x.info));
+    };
+    const mk = peer => {
+      const L = makeLink(str => post({ t: 'msg', to: peer, d: str }), () => { post({ t: 'bye', to: peer }); delete links[peer]; });
+      links[peer] = L;
+      return L;
+    };
+    bc.onmessage = ({ data: m }) => {
+      if (!m || m.from === me || (m.to && m.to !== me)) return;
+      if (m.t === 'ann') { seen[m.info.id] = { info: m.info, at: Date.now() }; emit(); }
+      else if (m.t === 'gone') { delete seen[m.id]; emit(); }
+      else if (m.t === 'who' && hostInfo) post({ t: 'ann', info: hostInfo });
+      else if (m.t === 'join' && hostInfo && m.lobby === hostInfo.id) {
+        if (links[m.from]) { const old = links[m.from]; delete links[m.from]; old.drop(); }
+        const L = mk(m.from);
+        post({ t: 'acc', to: m.from });
+        onLink(L);
+      } else if (m.t === 'acc' && joinWait) { const w = joinWait; joinWait = null; clearTimeout(w.timer); w.resolve(mk(m.from)); }
+      else if (m.t === 'msg' && links[m.from]) links[m.from].recv(m.d);
+      else if (m.t === 'bye' && links[m.from]) { const L = links[m.from]; delete links[m.from]; L.drop(); }
+    };
+    setInterval(() => { if (hostInfo) post({ t: 'ann', info: hostInfo }); emit(); }, 1500);
+    return {
+      kind: 'lokal',
+      watch(cb) { watchCb = cb; post({ t: 'who' }); emit(); return () => { watchCb = null; }; },
+      host(info, cb) {
+        hostInfo = info; onLink = cb; post({ t: 'ann', info });
+        return {
+          update(i) { hostInfo = i; post({ t: 'ann', info: i }); },
+          stop() { if (hostInfo) post({ t: 'gone', id: hostInfo.id }); hostInfo = null; },
+        };
+      },
+      join(id) {
+        return new Promise((resolve, reject) => {
+          joinWait = { resolve, timer: setTimeout(() => { joinWait = null; reject(new Error('Hittade inte lobbyn. Är värden kvar?')); }, 4000) };
+          post({ t: 'join', lobby: id });
+        });
+      },
+    };
+  }
+
+  // ---------- Transport 2: Supabase Realtime + WebRTC ----------
+  function supabaseTransport() {
+    const sb = window.supabase.createClient(ONLINE_CFG.supabaseUrl, ONLINE_CFG.supabaseKey,
+      { auth: { persistSession: false, autoRefreshToken: false }, realtime: { params: { eventsPerSecond: 20 } } });
+    const me = NET.clientId;
+    let lch = null, lready = false, watchCb = null, myInfo = null;
+    const pushPresence = () => { if (lch && lready) (myInfo ? lch.track(myInfo) : lch.untrack()).catch(() => {}); };
+    function lobbyCh() {
+      if (lch) return lch;
+      lready = false;
+      const ch = lch = sb.channel('gp-lobbies', { config: { presence: { key: me, enabled: true } } });
+      ch.on('presence', { event: 'sync' }, () => {
+        if (!watchCb || ch !== lch) return;
+        const st = ch.presenceState(), list = [];
+        for (const k in st) for (const m of st[k]) if (m && m.id && m.v === PROTO) list.push(m);
+        watchCb(list);
+      });
+      ch.subscribe(status => {
+        if (ch !== lch) return;
+        if (status === 'SUBSCRIBED') { lready = true; pushPresence(); }
+        else if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') && watchCb) watchCb(null, 'Kunde inte nå lobbyservern. Kontrollera internet och försök igen.');
+      });
+      return ch;
+    }
+    function dropLobbyCh() { if (lch && !myInfo && !watchCb) { sb.removeChannel(lch); lch = null; lready = false; } }
+    function sig(lobbyId, onSig) {
+      const ch = sb.channel('gp-sig-' + lobbyId, { config: { broadcast: { self: false } } });
+      ch.on('broadcast', { event: 'sig' }, ({ payload: m }) => { if (m && m.from !== me && (!m.to || m.to === me)) onSig(m); });
+      let ok;
+      const ready = new Promise(r => { ok = r; });
+      ch.subscribe(st => { if (st === 'SUBSCRIBED') ok(); });
+      return {
+        ready,
+        send: pl => ready.then(() => ch.send({ type: 'broadcast', event: 'sig', payload: Object.assign({ from: me }, pl) })).catch(() => {}),
+        close: () => { sb.removeChannel(ch); },
+      };
+    }
+    // ICE-kandidater som kommer innan motpartens beskrivning är satt läggs i kö.
+    function peer() {
+      const pc = new RTCPeerConnection({ iceServers: ONLINE_CFG.ice });
+      const P = { pc, q: [], remote: false };
+      P.ice = c => { if (P.remote) pc.addIceCandidate(c).catch(() => {}); else P.q.push(c); };
+      P.setRemote = async d => {
+        await pc.setRemoteDescription(d);
+        P.remote = true;
+        for (const c of P.q) pc.addIceCandidate(c).catch(() => {});
+        P.q = [];
+      };
+      return P;
+    }
+    return {
+      kind: 'supabase',
+      watch(cb) { watchCb = cb; lobbyCh(); return () => { watchCb = null; dropLobbyCh(); }; },
+      host(info, onLink) {
+        myInfo = info; lobbyCh(); pushPresence();
+        const peers = {};
+        const s = sig(info.id, async m => {
+          try {
+            if (m.t === 'join') {
+              if (peers[m.from]) try { peers[m.from].pc.close(); } catch (e) { /* */ }
+              const P = peers[m.from] = peer(), pc = P.pc;
+              const dc = pc.createDataChannel('gp', { ordered: true });
+              pc.onicecandidate = e => { if (e.candidate) s.send({ t: 'ice', to: m.from, c: e.candidate.toJSON() }); };
+              dc.onopen = () => { if (peers[m.from] === P) delete peers[m.from]; onLink(rtcLink(pc, dc)); };
+              await pc.setLocalDescription(await pc.createOffer());
+              s.send({ t: 'offer', to: m.from, sdp: pc.localDescription.toJSON() });
+            } else if (m.t === 'answer' && peers[m.from]) await peers[m.from].setRemote(m.sdp);
+            else if (m.t === 'ice' && peers[m.from]) peers[m.from].ice(m.c);
+          } catch (e) { /* gästen frågar igen */ }
+        });
+        return {
+          update(i) { myInfo = i; pushPresence(); },
+          stop() {
+            myInfo = null; pushPresence(); s.close();
+            for (const k in peers) try { peers[k].pc.close(); } catch (e) { /* */ }
+            setTimeout(dropLobbyCh, 500);
+          },
+        };
+      },
+      join(lobbyId) {
+        return new Promise((resolve, reject) => {
+          let P = null, done = false, tries = 0, timer = null;
+          const finish = (L, err) => {
+            if (done) return;
+            done = true; clearInterval(timer); s.close();
+            if (err) { if (P) try { P.pc.close(); } catch (e) { /* */ } reject(err); } else resolve(L);
+          };
+          const s = sig(lobbyId, async m => {
+            try {
+              if (m.t === 'offer') {
+                if (P) try { P.pc.close(); } catch (e) { /* */ }
+                const Q = P = peer(), pc = Q.pc;
+                pc.onicecandidate = e => { if (e.candidate) s.send({ t: 'ice', to: m.from, c: e.candidate.toJSON() }); };
+                pc.ondatachannel = e => {
+                  const dc = e.channel, open = () => { if (P === Q) finish(rtcLink(pc, dc)); };
+                  if (dc.readyState === 'open') open(); else dc.onopen = open;
+                };
+                await Q.setRemote(m.sdp);
+                await pc.setLocalDescription(await pc.createAnswer());
+                s.send({ t: 'answer', to: m.from, sdp: pc.localDescription.toJSON() });
+              } else if (m.t === 'ice' && P) P.ice(m.c);
+            } catch (e) { /* nästa försök */ }
+          });
+          const ask = () => {
+            if (done) return;
+            if (++tries > 3) return finish(null, new Error('Kunde inte ansluta till värden. Kontrollera att värden har spelet öppet och försök igen.'));
+            s.send({ t: 'join' });
+          };
+          s.ready.then(ask);
+          timer = setInterval(ask, 8000);
+        });
+      },
+    };
+  }
+  async function getTransport() {
+    if (NET.tr) return NET.tr;
+    if (useLocal()) return (NET.tr = localTransport());
+    if (!window.supabase) await loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2');
+    if (!window.supabase || !window.supabase.createClient) throw new Error('Kunde inte ladda anslutningen.');
+    return (NET.tr = supabaseTransport());
+  }
+
+  // ---------- Lobbyskärmen ----------
+  function onError(msg) { $('onErr').hidden = !msg; setText($('onErr'), msg || ''); }
+  function showOnlineView(v) {
+    NET.view = v;
+    $('onBrowse').hidden = v !== 'browse';
+    $('onRoom').hidden = v !== 'room';
+    if (v === 'browse') setText($('onTitle'), 'Spela online');
+  }
+  function openOnline() {
+    const saved = store.get(NAME_KEY) || {};
+    $('onName').value = saved.name || '';
+    $('onVillage').value = saved.village || ($('vnameInput').value || '').trim() || 'Nybygget';
+    onError('');
+    showOnlineView('browse');
+    $('ov-start').hidden = true;
+    $('ov-online').hidden = false;
+    document.querySelectorAll('#onSpeedSeg button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.lspeed === NET.chosenSpeed)));
+    setText($('onNote'), useLocal() ? 'Ingen server är inställd, så lobbyer syns bara mellan flikar i den här webbläsaren.' :
+      'Värden kör spelet, så det går bara medan värden har det öppet. Tappar du anslutningen kan du återansluta här.');
+    setText($('onStatus'), 'Söker …');
+    NET.list = [];
+    renderLobbies();
+    getTransport().then(tr => {
+      if (NET.unwatch) NET.unwatch();
+      NET.unwatch = tr.watch((list, err) => {
+        if (err) { setText($('onStatus'), ''); onError(err); return; }
+        NET.list = list; setText($('onStatus'), 'Uppdateras live'); renderLobbies();
+      });
+    }).catch(err => { setText($('onStatus'), ''); onError(err.message); });
+  }
+  function onlineBack() {
+    if (NET.view === 'room') { leaveOnline(); openOnline(); return; }
+    if (NET.unwatch) { NET.unwatch(); NET.unwatch = null; }
+    NET.role = null;
+    $('ov-online').hidden = true;
+    showStart();
+  }
+  function renderLobbies() {
+    if ($('ov-online').hidden || NET.view !== 'browse') return;
+    const rec = rj.get();
+    const list = (NET.list || []).slice().sort((a, b) => (a.started - b.started) || (b.ts - a.ts));
+    if (!list.length) { $('onList').innerHTML = '<p class="empty">Inga lobbyer just nu. Skapa en egen nedan, eller vänta tills en vän har skapat sin.</p>'; return; }
+    $('onList').innerHTML = list.map(l => {
+      const mine = rec && rec.lobby === l.id, id = esc(l.id);
+      let btn;
+      if (NET.joining && NET.lobbyId === l.id) btn = '<button class="btn" type="button" disabled>Ansluter …</button>';
+      else if (l.started) btn = mine ? '<button class="btn primary" type="button" data-act="on-join" data-id="' + id + '">Återanslut</button>' : '<button class="btn" type="button" disabled>Pågår</button>';
+      else if (l.n >= MAXP) btn = '<button class="btn" type="button" disabled>Full</button>';
+      else btn = '<button class="btn primary" type="button" data-act="on-join" data-id="' + id + '">Gå med</button>';
+      return '<div class="item">' + icon('t-village') +
+        '<div class="t"><b>' + esc(l.name) + '</b><small>' + esc(l.host) + ' · ' + l.n + ' av ' + MAXP + ' spelare · ' + l.speed + '×' + (l.started ? ' · pågår' : '') + '</small></div>' + btn + '</div>';
+    }).join('');
+  }
+  function myIdent() {
+    const name = clean($('onName').value, 16), village = clean($('onVillage').value, 24) || 'Nybygget';
+    if (!name) { onError('Skriv ditt namn först.'); $('onName').focus(); return null; }
+    store.set(NAME_KEY, { name, village });
+    return { name, village };
+  }
+  function pickLobbySpeed(v) {
+    if (NET.view === 'room') {
+      if (NET.role !== 'host' || !NET.lobby || NET.lobby.started) return;
+      NET.lobby.speed = v;
+      roomChanged();
+      return;
+    }
+    NET.chosenSpeed = v;
+    document.querySelectorAll('#onSpeedSeg button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.lspeed === v)));
+  }
+  function renderRoom() {
+    const host = NET.role === 'host';
+    const r = host ? Object.assign({ you: 0 }, roomData()) : NET.room;
+    if (!r || $('ov-online').hidden) return;
+    setText($('onTitle'), r.name);
+    setText($('onRoomInfo'), host ? 'Lobbyn syns nu för andra under Spela online. Starta när alla är med, 2–4 spelare.' : 'Du är med. Värden startar spelet när alla är med.');
+    const cols = E.CONFIG.playerColors;
+    let html = r.players.map((p, i) =>
+      '<div class="stand"><span class="dot" style="background:' + cols[i % cols.length][0] + '"></span>' +
+        '<div class="who">' + esc(p.name) + (i === r.you ? ' (du)' : '') + '<small>' + esc(p.village) + (p.on ? '' : ' · ansluter …') + '</small></div>' +
+        '<span class="stand-end"><span class="tag ' + (p.host ? 'mine' : 'neutral') + '">' + (p.host ? 'Värd' : p.bot ? 'Bot · ' + RIVAL_LEVELS[p.bot].toLowerCase() : 'Gäst') + '</span>' +
+        (host && p.bot ? '<button class="icon-btn sm" type="button" data-act="on-rmbot" data-i="' + i + '" aria-label="Ta bort ' + esc(p.name) + '">' + icon('i-close') + '</button>' : '') + '</span></div>').join('');
+    for (let i = r.players.length; i < MAXP; i++) html += '<div class="stand slot"><span class="dot"></span><div class="who">Ledig plats</div><span></span></div>';
+    $('onPlayers').innerHTML = html;
+    $('onRoomSeg').querySelectorAll('button').forEach(b => { b.setAttribute('aria-pressed', String(+b.dataset.lspeed === r.speed)); b.disabled = !host; });
+    const n = r.players.length;
+    $('onBotRow').hidden = !host || n >= MAXP;
+    $('onStartBtn').hidden = !host;
+    $('onStartBtn').disabled = n < 2;
+    setText($('onStartBtn'), n < 2 ? 'Väntar på spelare' : 'Starta spelet');
+    setText($('onRoomHint'), host ? 'Du kan ändra hastigheten under spelet också. Bottarna körs i din webbläsare.' :
+      'Väntar på att ' + (r.players[0] ? r.players[0].name : 'värden') + ' startar spelet. Hastighet ' + r.speed + '×.');
+  }
+
+  // ---------- Värd ----------
+  function lobbyInfo() {
+    const lob = NET.lobby;
+    return { id: lob.id, v: PROTO, name: lob.name, host: lob.players[0].name, n: lob.players.length, speed: lob.speed, started: !!lob.started, ts: Date.now() };
+  }
+  function roomData() {
+    const lob = NET.lobby;
+    return { id: lob.id, name: lob.name, speed: lob.speed, started: lob.started,
+      players: lob.players.map(p => ({ name: p.name, village: p.village, host: !!p.host, bot: p.bot || null, on: !!p.on })) };
+  }
+  function lobbySave() {
+    const lob = NET.lobby;
+    return { id: lob.id, name: lob.name, speed: lob.speed, started: true,
+      players: lob.players.map(p => ({ name: p.name, village: p.village, token: p.token, host: !!p.host, bot: p.bot || null, pid: p.pid })) };
+  }
+  function roomChanged() {
+    const lob = NET.lobby;
+    if (!lob || NET.role !== 'host') return;
+    if (NET.hostH) NET.hostH.update(lobbyInfo());
+    if (!lob.started) {
+      const room = roomData();
+      lob.players.forEach((p, i) => { if (p.link) p.link.send(Object.assign({ k: 'room', you: i }, room)); });
+    }
+    if (NET.view === 'room') renderRoom();
+  }
+  function onMap() {
+    const on = {};
+    if (NET.lobby) NET.lobby.players.forEach(p => { if (p.pid) on[p.pid] = !!(p.host || p.bot || p.link); });
+    return on;
+  }
+  async function hostCreate() {
+    onError('');
+    const me0 = myIdent();
+    if (!me0) return;
+    let tr;
+    try { tr = await getTransport(); } catch (e) { onError(e.message); return; }
+    if (NET.unwatch) { NET.unwatch(); NET.unwatch = null; }
+    const gen = /[sxz]$/i.test(me0.name) ? me0.name + ' lobby' : me0.name + 's lobby';
+    NET.lobby = { id: rid(8), name: clean($('onLobbyName').value, 30) || gen, speed: NET.chosenSpeed, started: false,
+      players: [{ name: me0.name, village: me0.village, token: 'host', host: true, on: true }] };
+    NET.role = 'host';
+    NET.hostH = tr.host(lobbyInfo(), onGuestLink);
+    showOnlineView('room');
+    renderRoom();
+  }
+  async function hostResume() {
+    const os = store.get(OSAVE_KEY);
+    if (!os || !os.lobby || !E.isValidSave(os.state)) return;
+    let tr;
+    try { tr = await getTransport(); } catch (e) { setText($('oContinueInfo'), e.message); return; }
+    NET.lobby = os.lobby;
+    NET.lobby.players.forEach(p => { p.link = null; p.on = !!(p.host || p.bot); });
+    NET.role = 'host'; NET.view = 'game'; ME = 'p1';
+    NET.hostH = tr.host(lobbyInfo(), onGuestLink);
+    beginGame(os.state, os.speed || NET.lobby.speed, os.acc);
+    setTab('village');
+  }
+  function onGuestLink(L) {
+    L.onmsg = m => {
+      if (m.k !== 'hello') return;
+      const lob = NET.lobby;
+      if (!lob || NET.role !== 'host') { L.drop(); return; }
+      const deny = why => { L.send({ k: 'deny', why }); setTimeout(L.drop, 500); };
+      if (m.v !== PROTO) return deny('Värden har en annan version av spelet. Ladda om sidan och försök igen.');
+      let pl = lob.players.find(p => !p.host && !p.bot && p.token === m.token);
+      if (!pl) {
+        if (lob.started) return deny('Spelet har redan börjat.');
+        if (lob.players.length >= MAXP) return deny('Lobbyn är full.');
+        pl = { name: clean(m.name, 16) || 'Gäst', village: clean(m.village, 24) || 'Nybygget', token: clean(m.token, 32), on: true };
+        lob.players.push(pl);
+      }
+      if (pl.link && pl.link !== L) { const old = pl.link; pl.link = null; old.drop(); }
+      pl.link = L; pl.on = true;
+      L.onmsg = m2 => hostMsg(pl, m2);
+      L.onclose = () => guestGone(pl, L);
+      if (lob.started) {
+        sendStart(pl);
+        if (S && pl.pid) toast(S.players[pl.pid].name + ' är tillbaka.', 'good');
+      }
+      roomChanged();
+    };
+  }
+  function guestGone(pl, L) {
+    if (pl.link !== L) return;
+    pl.link = null; pl.on = false;
+    const lob = NET.lobby;
+    if (!lob || NET.role !== 'host') return;
+    if (!lob.started) lob.players = lob.players.filter(p => p !== pl);
+    else if (S && pl.pid && !S.winner) toast(S.players[pl.pid].name + (pl.left ? ' lämnade spelet.' : ' tappade anslutningen.'));
+    pl.left = false;
+    roomChanged();
+  }
+  function hostMsg(pl, m) {
+    if (m.k === 'bye') { pl.left = true; if (pl.link) pl.link.drop(); return; }
+    if (m.k !== 'act' || !NET.lobby || !NET.lobby.started || !S || !pl.pid || !pl.link) return;
+    // Spelaren tas alltid från anslutningen, aldrig från meddelandet.
+    const r = S.winner ? { ok: false, error: 'Spelet är slut.' } : E.apply(S, Object.assign({}, m.a, { player: pl.pid }));
+    pl.link.send({ k: 'res', id: m.id, ok: r.ok, error: r.error || null, v: viewFor(pl), ps: paused, on: onMap(), sp: speed });
+    NET.lastSend = 0;
+  }
+  function viewFor(pl) { const v = E.encodeView(S, pl.pid, pl.logFrom || 0); pl.logFrom = lastLogId(); return v; }
+  function sendStart(pl) {
+    const v = E.encodeView(S, pl.pid, 0, 80);
+    pl.logFrom = lastLogId();
+    pl.link.send({ k: 'start', pid: pl.pid, speed, lobby: { id: NET.lobby.id, name: NET.lobby.name }, init: E.initFor(S), v, ps: paused, on: onMap() });
+  }
+  function addBot(level) {
+    const lob = NET.lobby;
+    if (!lob || NET.role !== 'host' || lob.started || lob.players.length >= MAXP || !RIVAL_LEVELS[level]) return;
+    const used = new Set(lob.players.map(p => p.village.toLowerCase()));
+    const names = E.CONFIG.rivalVillageNames.filter(x => !used.has(x.toLowerCase()));
+    lob.players.push({ name: 'Bot', village: names[Math.floor(Math.random() * names.length)] || 'Botby', bot: level, on: true, token: 'bot-' + rid(8) });
+    lob.players.filter(p => p.bot).forEach((p, k) => { p.name = 'Bot ' + (k + 1); });
+    roomChanged();
+  }
+  function removeBot(i) {
+    const lob = NET.lobby;
+    if (!lob || NET.role !== 'host' || lob.started || !lob.players[i] || !lob.players[i].bot) return;
+    lob.players.splice(i, 1);
+    lob.players.filter(p => p.bot).forEach((p, k) => { p.name = 'Bot ' + (k + 1); });
+    roomChanged();
+  }
+  function hostStart() {
+    const lob = NET.lobby;
+    if (!lob || NET.role !== 'host' || lob.started) return;
+    lob.players = lob.players.filter(p => p.host || p.bot || p.link);
+    if (lob.players.length < 2) { roomChanged(); return; }
+    const st = E.createGame({ humans: lob.players.map(p => ({ name: p.name, villageName: p.village, bot: p.bot || null })) });
+    lob.players.forEach((p, i) => { p.pid = 'p' + (i + 1); });
+    lob.started = true;
+    ME = 'p1';
+    NET.view = 'game';
+    beginGame(st, lob.speed, 0);
+    setTab('village');
+    lob.players.forEach(p => { if (p.link) sendStart(p); });
+    roomChanged();
+  }
+  // Varje halv sekund får gästerna en ny vy (och direkt efter egna handlingar).
+  function hostBroadcast(now) {
+    const lob = NET.lobby;
+    if (!S || !lob || !lob.started || now - NET.lastSend < 500) return;
+    NET.lastSend = now;
+    const on = onMap();
+    NET.on = on;
+    for (const pl of lob.players) if (pl.link && pl.pid && !pl.link.busy()) pl.link.send({ k: 'view', v: viewFor(pl), ps: paused, on, sp: speed });
+  }
+
+  // ---------- Gäst ----------
+  async function guestJoin(id) {
+    onError('');
+    const rec = rj.get();
+    let ident;
+    if (rec && rec.lobby === id) ident = { name: rec.name, village: rec.village, token: rec.token };
+    else {
+      const m = myIdent();
+      if (!m) return;
+      ident = Object.assign({ token: rid(16) }, m);
+    }
+    let tr;
+    try { tr = await getTransport(); } catch (e) { return joinFailed(e.message); }
+    NET.role = 'guest'; NET.lobbyId = id; NET.joining = true; NET.ended = false;
+    renderLobbies();
+    tr.join(id).then(L => {
+      NET.joining = false;
+      if (NET.role !== 'guest' || NET.lobbyId !== id) { L.drop(); return; }
+      NET.link = L;
+      rj.set({ lobby: id, name: ident.name, village: ident.village, token: ident.token, at: Date.now() });
+      L.onmsg = guestMsg;
+      L.onclose = () => guestLost(L);
+      L.send({ k: 'hello', v: PROTO, name: ident.name, village: ident.village, token: ident.token });
+    }, err => { NET.joining = false; joinFailed(err.message); });
+  }
+  function joinFailed(msg) {
+    if (NET.view === 'game') { setText($('lostText'), msg); $('rejoinBtn').disabled = false; setText($('rejoinBtn'), 'Försök igen'); return; }
+    NET.role = null; NET.lobbyId = null;
+    showOnlineView('browse');
+    onError(msg);
+    renderLobbies();
+  }
+  function rejoin() {
+    if (!NET.lobbyId || NET.joining) return;
+    $('rejoinBtn').disabled = true; setText($('rejoinBtn'), 'Ansluter …');
+    guestJoin(NET.lobbyId);
+  }
+  function guestMsg(m) {
+    switch (m.k) {
+      case 'room':
+        NET.room = m;
+        if (NET.view !== 'game') { showOnlineView('room'); renderRoom(); }
+        break;
+      case 'deny': {
+        const L = NET.link;
+        NET.link = null;
+        if (L) { L.onclose = null; L.drop(); }
+        if (NET.view === 'game') joinFailed(m.why);
+        else { if (!NET.room) rj.del(); joinFailed(m.why); }
+        break;
+      }
+      case 'start': guestStart(m); break;
+      case 'view':
+        if (NET.pending > 0 && Date.now() - NET.pendingAt < 4000) return;   // svaret på egen handling är på väg
+        NET.pending = 0;
+        guestView(m);
+        break;
+      case 'res':
+        NET.pending = Math.max(0, NET.pending - 1);
+        if (!m.ok && m.error) toast(m.error, 'bad');
+        guestView(m);
+        break;
+      case 'end':
+        NET.ended = true;
+        showLost(m.why || 'Värden avslutade spelet.');
+        break;
+    }
+  }
+  function guestStart(m) {
+    const again = NET.view === 'game' && S && S.view;
+    NET.init = m.init; ME = m.pid; NET.view = 'game'; NET.pending = 0; NET.ended = false; NET.on = m.on || {};
+    const rec = rj.get();
+    if (rec) { rec.pid = m.pid; rec.lname = m.lobby.name; rj.set(rec); }
+    const tab = ui.tab;
+    beginGame(E.decodeView(m.init, m.v, []), m.speed, 0);
+    setTab(again ? tab : 'village');
+    if (again) toast('Ansluten igen.', 'good');
+    guestPause(m.ps);
+  }
+  function guestView(m) {
+    if (!S || !NET.init || !m.v) return;
+    const trained0 = me().stats.trained;
+    S = E.decodeView(NET.init, m.v, S.log);
+    acc = 0;
+    if (m.sp && m.sp !== speed) { speed = m.sp; toast('Värden ändrade hastigheten till ' + speed + '×.'); }
+    if (me().stats.trained > trained0) playTrained();
+    processLog();
+    noteOnline(m.on);
+    guestPause(m.ps);
+    if (S.winner && !winShown) { refresh(true); showWin(); }
+  }
+  function guestPause(ps) {
+    paused = !!ps;
+    if (paused) { setText($('pauseText'), 'Värden har pausat spelet. Det fortsätter när värden trycker på Fortsätt.'); $('resumeBtn').hidden = true; }
+    $('ov-pause').hidden = !paused;
+  }
+  function noteOnline(on) {
+    if (!on) return;
+    const prev = NET.on || {};
+    for (const id in on) {
+      if (id === ME || prev[id] === undefined || prev[id] === on[id] || !S.players[id]) continue;
+      toast(S.players[id].name + (on[id] ? ' är tillbaka.' : ' tappade anslutningen.'), on[id] ? 'good' : '');
+    }
+    NET.on = on;
+  }
+  // Gästen kontrollerar handlingen mot sin egen vy direkt (snabbt svar) och skickar den till värden.
+  function guestDispatch(action, quiet) {
+    if (!NET.link) { if (!quiet) toast('Inte ansluten till värden.', 'bad'); return { ok: false, error: 'Inte ansluten till värden.' }; }
+    const r = E.apply(S, Object.assign({ player: ME }, action));
+    if (!r.ok) { if (!quiet) toast(r.error, 'bad'); refresh(true); return r; }
+    NET.pending++; NET.pendingAt = Date.now();
+    NET.link.send({ k: 'act', id: ++NET.reqId, a: action });
+    refresh(true);
+    return r;
+  }
+  function guestLost(L) {
+    if (NET.link !== L) return;
+    NET.link = null;
+    if (NET.leaving) return;
+    if (NET.view === 'game') showLost(NET.ended ? null : 'Anslutningen till värden bröts. Spelet fortsätter hos värden, så du kan återansluta.');
+    else { NET.role = null; showOnlineView('browse'); onError('Anslutningen till lobbyn bröts.'); renderLobbies(); }
+  }
+  function showLost(text) {
+    if (text) setText($('lostText'), text);
+    $('rejoinBtn').disabled = false; setText($('rejoinBtn'), 'Återanslut');
+    $('ov-pause').hidden = true;
+    $('ov-lost').hidden = false;
+  }
+
+  // ---------- Lämna och nollställ ----------
+  function leaveOnline() {
+    NET.leaving = true;
+    if (NET.role === 'host') {
+      const lob = NET.lobby;
+      const why = !lob || !lob.started ? 'Värden stängde lobbyn.' : S && S.winner ? 'Spelet är slut.' :
+        'Värden lämnade spelet. Om värden fortsätter senare kan du återansluta under Spela online.';
+      if (lob && lob.started && S) save();
+      if (lob) lob.players.forEach(p => { if (p.link) { const L = p.link; p.link = null; L.send({ k: 'end', why }); setTimeout(() => L.drop(), 400); } });
+      if (NET.hostH) NET.hostH.stop();
+    } else if (NET.role === 'guest') {
+      if (NET.link) { const L = NET.link; NET.link = null; L.send({ k: 'bye' }); setTimeout(() => L.drop(), 300); }
+      if (NET.view !== 'game') rj.del();
+    }
+    if (NET.unwatch) NET.unwatch();
+    Object.assign(NET, { role: null, view: null, lobby: null, hostH: null, link: null, room: null, init: null, unwatch: null,
+      pending: 0, on: {}, lobbyId: null, joining: false, ended: false, leaving: false });
+    ME = 'p1';
+    // Onlinespelet lämnas: det får aldrig hamna i singleplayer-sparningen.
+    if (S && S.online) { S = null; running = false; }
+  }
+  // Knappar som beter sig annorlunda online.
+  function onlineChrome() {
+    const on = !!(S && S.online);
+    $('pauseBtn').hidden = NET.role === 'guest';
+    $('speedTag').disabled = NET.role === 'guest';
+    $('speedTag').title = NET.role === 'guest' ? 'Värden bestämmer hastigheten.' : 'Byt hastighet: 1×, 2×, 5×, 10×' + (on ? '. Gäller alla spelare.' : '');
+  }
+
+  // Håll liv i anslutningarna. Ingen kontakt på 20 s räknas som frånkopplad.
+  setInterval(() => {
+    const now = Date.now();
+    const beat = L => { if (!L || !L.open) return; if (now - L.lastIn > 20000) { L.drop(); return; } L.send({ k: 'ping' }); };
+    if (NET.role === 'host' && NET.lobby) NET.lobby.players.forEach(p => beat(p.link));
+    else if (NET.role === 'guest') beat(NET.link);
+  }, 2500);
+  // Mobilen låser skärmen och WebRTC dör; försök återansluta när spelet syns igen.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && NET.role === 'guest' && NET.view === 'game' && !NET.link && !NET.joining && !NET.ended) rejoin();
+  });
+
+
   // ---------- Regler ----------
   function rulesHTML() {
     const c = Engine.CONFIG, u = c.units, n1 = x => nf1.format(x);
@@ -4799,6 +5717,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       '<b>Två rivaler</b> bygger sina byar på kartan och spelar efter samma regler, dimman inräknad. De anfaller dig och varandra och grundar så småningom egna byar. En rivals trupper ger inget guld.',
       '<b>Kalla hem alla</b> under Trupper tar hem trupperna som står på dina objektiv, var och en till sin egen by. Trupper som redan är på väg fortsätter.',
       'Först till <b>' + c.vpToWin + ' vinstpoäng</b> vinner.',
+      '<b>Online</b>: 2–4 spelare. En spelare skapar en lobby, väljer hastighet och kan fylla på med bottar; de andra går med under Spela online. Värden kör spelet och kan ändra hastigheten under spelets gång, så det går bara medan värden har det öppet. Tappar du anslutningen kan du återansluta, och värden kan fortsätta ett sparat onlinespel senare.',
     ].map(x => '<li>' + x + '</li>').join('');
   }
   $('rulesStart').innerHTML = rulesHTML();
