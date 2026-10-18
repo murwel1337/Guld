@@ -806,6 +806,29 @@ button.stat:hover { background: var(--slab-3); }
   .hud .brand { display: none; }
   .hud { grid-template-columns: 0 minmax(0, 1fr) minmax(440px, 600px) auto auto; gap: 12px; }
 }
+/* Hastighet med minus och plus */
+.speed-ctl { display: inline-flex; align-items: center; gap: 3px; }
+.speed-tag { display: inline-grid; place-items: center; cursor: default; }
+.speed-tag:hover { color: var(--ink-dim); background: var(--slab-2); }
+.speed-tag.fast:hover { color: var(--ground); background: var(--gold); }
+.speed-btn { width: 26px; height: 28px; padding: 0; display: grid; place-items: center; background: var(--slab-2); border: 1px solid var(--seam); border-radius: 6px; color: var(--ink); font: 700 18px/1 var(--f-num); }
+.speed-btn:hover:not(:disabled) { background: var(--slab-3); }
+.speed-btn:disabled { opacity: .3; cursor: default; }
+@media (max-width: 479px) {
+  .speed-ctl { gap: 2px; }
+  .speed-btn { width: 22px; height: 26px; font-size: 16px; }
+}
+.res-sub { margin: 4px 0 -4px; }
+@media (max-width: 479px) {
+  .hud .brand { display: none; }          /* plats för klocka och hastighet */
+  .hud { grid-template-columns: 0 minmax(0, 1fr) auto auto; }
+}
+.res-txt .name { flex-wrap: wrap; }
+.res-txt .name .lvl { white-space: nowrap; }
+@media (min-width: 960px) and (max-width: 1199px) {
+  .where-coord { display: none; }
+  .hud { grid-template-columns: 0 minmax(150px, 1fr) minmax(400px, 2fr) auto auto; }
+}
 
 </style>
 </head>
@@ -858,7 +881,7 @@ button.stat:hover { background: var(--slab-3); }
       </button>
       <button class="where-name" type="button" id="where" data-act="next-town"><span id="whereName"></span> <span class="where-coord" id="whereCoord"></span><svg class="ic sw" id="whereSw" hidden><use href="#i-swap"/></svg></button>
     </div>
-    <div class="clock-wrap"><span class="clock" id="clock" title="Speltid">0:00:00</span><button class="speed-tag" type="button" id="speedTag" data-act="speed" title="Byt hastighet: 1×, 2×, 5×, 10×" aria-label="Hastighet 1×. Klicka för att byta.">1×</button></div>
+    <div class="clock-wrap"><span class="clock" id="clock" title="Speltid">0:00:00</span><span class="speed-ctl"><button class="speed-btn" type="button" data-act="speed-down" id="speedDown" aria-label="Sänk hastigheten">−</button><span class="speed-tag" id="speedTag" title="Speltempo" aria-live="polite">1×</span><button class="speed-btn" type="button" data-act="speed-up" id="speedUp" aria-label="Öka hastigheten">+</button></span></div>
     <div class="hud-btns">
       <button class="icon-btn" id="pauseBtn" data-act="pause" aria-label="Pausa spelet"><svg><use href="#i-pause"/></svg></button>
       <button class="icon-btn" data-act="menu" aria-label="Meny"><svg><use href="#i-menu"/></svg></button>
@@ -971,7 +994,7 @@ button.stat:hover { background: var(--slab-3); }
         <button type="button" data-speed="5" aria-pressed="false">5×</button>
         <button type="button" data-speed="10" aria-pressed="false">10×</button>
       </div>
-      <p class="hint">1× är spelets riktiga tempo. Du kan byta när som helst med knappen bredvid klockan.</p>
+      <p class="hint">1× är spelets riktiga tempo. Du kan ändra det när som helst med minus och plus bredvid klockan.</p>
     </div>
     <div class="field">
       <span class="label" id="rivalLabel">Rivaler</span>
@@ -1184,6 +1207,7 @@ const Engine = (function () {
     researchCostFirst: 40,        // [antagande] nivå 1 kostar 40 guld ...
     researchCostGrowth: 1.5,      // [antagande] ... och varje nivå × 1,5
     researchMinutesPerLevel: 2,   // [antagande] nivå L tar L × 2 minuter
+    workshopSpeedFactor: 0.9,     // varje verkstadsnivå över 1 gör förbättringarna 10 % snabbare
     spawnBaseChance: 0.20,
     spawnChancePerMinute: 0.005,
     monumentStartTroops: 5,
@@ -1254,6 +1278,8 @@ const Engine = (function () {
 
   const MINUTE = 60000, HOUR = 3600000;
   const UNIT_KEYS = ['soldier', 'berserker', 'shield', 'scout', 'settler'];
+  const UNIT_UP = ['soldier', 'berserker', 'shield'];                    // trupper som kan förbättras i verkstaden
+  const RES_KINDS = ['attack', 'defense'].concat(UNIT_UP);
   const ATK = ['berserker', 'soldier', 'shield'];          // ordning när ett anfall sätts ihop
   const DEF = ['shield', 'soldier', 'berserker'];          // ordning när en ruta förstärks
   const KEEP = ['shield', 'soldier', 'scout', 'berserker'];
@@ -1290,6 +1316,9 @@ const Engine = (function () {
     return out;
   }
   function powerC(cfg, u, kind) { let p = 0; for (const k of UNIT_KEYS) p += (u[k] || 0) * cfg.units[k][kind]; return p; }
+  // Bonus kan vara ett tal (samma för alla) eller en vektor per trupptyp (verkstadens enhetsförbättringar).
+  const mk = (m, k) => m == null ? 1 : typeof m === 'number' ? m : (m[k] != null ? m[k] : 1);
+  function powerM(cfg, u, kind, m) { let p = 0; for (const k of UNIT_KEYS) p += (u[k] || 0) * cfg.units[k][kind] * mk(m, k); return p; }
   // Fördela n förluster proportionellt efter antal (största rest).
   function spread(u, n) {
     const tot = total(u), out = U();
@@ -1320,7 +1349,7 @@ const Engine = (function () {
       gold, food, buildings: b, hu: U(), home: 0,
       tq: [], queue: 0, trainProgress: 0, batch: 0,
       unlocked: { berserker: false, shield: false, scout: false }, labbing: null,
-      research: { attack: 0, defense: 0 }, researching: null,
+      research: { attack: 0, defense: 0 }, unitUp: { soldier: 0, berserker: 0, shield: 0 }, researching: null,
       starve: 0, founded: s.time,
     };
   }
@@ -1385,7 +1414,7 @@ const Engine = (function () {
     const nRivals = humans ? 0 : rival ? (opts.rivalCount != null ? opts.rivalCount : cfg.rivalCount) : 0;
     const N = cfg.mapSize;
     const s = {
-      v: 9, cfg, seed, rng: seed, time: 0, nextSpawnAt: MINUTE,
+      v: 10, cfg, seed, rng: seed, time: 0, nextSpawnAt: MINUTE,
       tiles: [], towns: {}, players: {}, order: [], armies: [], caravans: [], log: [],
       nextId: 1, winner: null, endedAt: null, online: !!humans,
     };
@@ -1404,8 +1433,16 @@ const Engine = (function () {
       const tmp = rest[i]; rest[i] = rest[j]; rest[j] = tmp;
     }
     const used = new Set();
+    if (humans) {
+      // Online: ett monument mer än antalet spelare, utplacerade så att ingen får mycket närmare än de andra.
+      for (const i of fairMonuments(s, villages, humans.length + 1, rest)) {
+        s.tiles[i].type = 'monument';
+        s.tiles[i].u.soldier = cfg.monumentStartTroops; syncTile(s.tiles[i]);
+        used.add(i);
+      }
+    }
     for (const i of rest) {
-      if (used.size >= cfg.monumentCount) break;
+      if (humans || used.size >= cfg.monumentCount) break;
       if (villages.every(v => dist(s.tiles[i], s.tiles[v]) >= cfg.monumentMinDistance)) {
         s.tiles[i].type = 'monument';
         s.tiles[i].u.soldier = cfg.monumentStartTroops; syncTile(s.tiles[i]);
@@ -1443,6 +1480,25 @@ const Engine = (function () {
       addPlayer(s, 'p' + (r + 2), { name: 'Rival', villageName: name, color: col[0], hi: col[1], bot: rival }, villages[r + 1]);
     }
     return s;
+  }
+
+  function fairMonuments(s, villages, k, rest) {
+    const T = i => s.tiles[i], minD = Math.max(s.cfg.monumentMinDistance, 4);
+    const cand = rest.filter(i => villages.every(v => dist(T(i), T(v)) >= minD));
+    let best = null, bestScore = Infinity;
+    for (let tries = 0; tries < 400; tries++) {
+      const pick = [];
+      for (let g = 0; g < 300 && pick.length < k; g++) {
+        const i = cand[Math.floor(rand(s) * cand.length)];
+        if (pick.every(j => dist(T(i), T(j)) >= 4)) pick.push(i);
+      }
+      if (pick.length < k) continue;
+      const sums = villages.map(v => pick.reduce((a, m) => a + dist(T(v), T(m)), 0));
+      const near = villages.map(v => Math.min(...pick.map(m => dist(T(v), T(m)))));
+      const score = (Math.max(...sums) - Math.min(...sums)) / k + (Math.max(...near) - Math.min(...near));
+      if (score < bestScore) { bestScore = score; best = pick; }
+    }
+    return best || cand.slice(0, k);
   }
 
   // Startbyarna sprids så att alla har ungefär lika långt till varandra.
@@ -1543,7 +1599,27 @@ const Engine = (function () {
     return !!(tw.unlocked && tw.unlocked[k]);
   }
   function researchCost(s, level) { return Math.round(s.cfg.researchCostFirst * Math.pow(s.cfg.researchCostGrowth, level - 1)); }
-  function researchMs(s, level) { return Math.round(level * s.cfg.researchMinutesPerLevel * MINUTE); }
+  function researchMs(s, level, tw) {
+    const W = tw ? tw.buildings.workshop : 1;
+    return Math.round(level * s.cfg.researchMinutesPerLevel * MINUTE * Math.pow(s.cfg.workshopSpeedFactor || 1, Math.max(0, W - 1)));
+  }
+  function researchLevel(tw, kind) { return UNIT_UP.includes(kind) ? ((tw.unitUp && tw.unitUp[kind]) || 0) : tw.research[kind]; }
+  // Bonus per trupptyp: allmän bonus + verkstadens förbättring av just den trupptypen (+4 % per nivå).
+  function unitBonus(s, tw, k) { return tw && tw.unitUp && tw.unitUp[k] ? s.cfg.researchBonusPerLevel * tw.unitUp[k] : 0; }
+  function attackVec(s, p, tw) { const m = attackMult(s, p, tw), v = {}; for (const k of UNIT_KEYS) v[k] = m + unitBonus(s, tw, k); return v; }
+  function defenseVec(s, p, tw) { const m = defenseMult(s, p, tw), v = {}; for (const k of UNIT_KEYS) v[k] = m + unitBonus(s, tw, k); return v; }
+  // Garnison med trupper från flera byar: varje trupptyp får sina byars bonus, viktat efter antal.
+  function garrisonDefVec(s, t) {
+    const p = t.owner ? s.players[t.owner] : null;
+    if (!p) return 1;
+    const base = defenseMult(s, p, null), v = {};
+    for (const k of UNIT_KEYS) {
+      let n = 0, sum = 0;
+      for (const h in (t.g || {})) { const c = t.g[h][k] || 0; if (c) { n += c; sum += c * defenseVec(s, p, s.towns[h])[k]; } }
+      v[k] = n ? sum / n : base;
+    }
+    return v;
+  }
   // Bonus = byns verkstad + spelarens färdigheter (globala).
   function attackMult(s, p, tw) { return p ? 1 + (tw ? s.cfg.researchBonusPerLevel * tw.research.attack : 0) + s.cfg.skills.atk.per * p.skills.atk : 1; }
   function defenseMult(s, p, tw) { return p ? 1 + (tw ? s.cfg.researchBonusPerLevel * tw.research.defense : 0) + s.cfg.skills.def.per * p.skills.def : 1; }
@@ -1648,8 +1724,8 @@ const Engine = (function () {
   // och fördelat proportionellt på trupptyperna. Den svagare sidan förlorar alltså alla.
   function battleUnits(s, aU, dU, aMul, dMul, dFlat) {
     const cfg = s ? s.cfg : CONFIG;
-    let aPow = round2(powerC(cfg, aU, 'atk') * (aMul || 1));
-    let dPow = round2(powerC(cfg, dU, 'def') * (dMul || 1) + (dFlat || 0));
+    let aPow = round2(powerM(cfg, aU, 'atk', aMul));
+    let dPow = round2(powerM(cfg, dU, 'def', dMul) + (dFlat || 0));
     const diff = round2(aPow - dPow);
     if (diff > 0) aPow = round2(aPow + diff); else if (diff < 0) dPow = round2(dPow - diff);
     const A = total(aU), D = total(dU);
@@ -1668,7 +1744,7 @@ const Engine = (function () {
     const cfg = s ? s.cfg : CONFIG;
     order = order || ATK;
     dFlat = dFlat || 0;
-    const D = total(dU), dPow = powerC(cfg, dU, 'def') * (dMul || 1) + dFlat, am = aMul || 1;
+    const D = total(dU), dPow = powerM(cfg, dU, 'def', dMul) + dFlat;
     const out = U(), left = U(avail);
     let n = 0, aPow = 0;
     // Med förlustregeln vinner anfallet om anfallspoängen är strikt större än försvarets.
@@ -1676,7 +1752,7 @@ const Engine = (function () {
     const next = () => {
       const k = order.find(x => left[x] > 0);
       if (!k) return false;
-      left[k]--; out[k]++; n++; aPow += cfg.units[k].atk * am;
+      left[k]--; out[k]++; n++; aPow += cfg.units[k].atk * mk(aMul, k);
       return true;
     };
     while (!wins()) if (!next() || n > 5000) return null;
@@ -1747,14 +1823,16 @@ const Engine = (function () {
         return ok();
       }
       case 'research': {
-        if (a.kind !== 'attack' && a.kind !== 'defense') return fail('Okänd förbättring.');
+        if (!RES_KINDS.includes(a.kind)) return fail('Okänd förbättring.');
+        if (UNIT_UP.includes(a.kind) && !canTrain(tw, a.kind)) return fail('Lås upp trupptypen i forskningscentret först.');
         if (tw.researching) return fail('Verkstaden arbetar redan med en förbättring.');
-        const level = tw.research[a.kind] + 1;
+        if (!tw.unitUp) tw.unitUp = { soldier: 0, berserker: 0, shield: 0 };
+        const level = researchLevel(tw, a.kind) + 1;
         if (level > tw.buildings.workshop) return fail('Kräver verkstad nivå ' + level + '.');
         const cost = researchCost(s, level);
         if (tw.gold < cost) return fail('Inte tillräckligt med guld.');
         tw.gold -= cost;
-        tw.researching = { kind: a.kind, level, start: s.time, done: s.time + researchMs(s, level) };
+        tw.researching = { kind: a.kind, level, start: s.time, done: s.time + researchMs(s, level, tw) };
         return ok();
       }
       case 'send': {
@@ -1960,7 +2038,7 @@ const Engine = (function () {
     }
     if (tw.researching && s.time >= tw.researching.done) {
       const r = tw.researching;
-      tw.research[r.kind] = r.level;
+      if (UNIT_UP.includes(r.kind)) tw.unitUp[r.kind] = r.level; else tw.research[r.kind] = r.level;
       tw.researching = null;
       log(s, { kind: 'research', player: p.id, town: tw.idx, which: r.kind, level: r.level });
     }
@@ -2064,7 +2142,7 @@ const Engine = (function () {
     const defender = tile.owner;
     const dp = defender ? s.players[defender] : null;
     const A = a.count, D = tile.troops, aU0 = U(a.u), dU0 = U(tile.u);
-    const aMul = attackMult(s, p, homeTown);
+    const aMul = attackVec(s, p, homeTown);
     // Vilka som stannar på en erövrad ruta: alla om anfallet skickades med "stanna och försvara".
     const staying = u => (a.stay || cfg.stayAfterCapture) ? U(u) : U();
     // Taggtråd: ägarens objektiv har +1 i försvar, även när ingen står där.
@@ -2077,11 +2155,11 @@ const Engine = (function () {
       goHome(subFrom(U(a.u), st));
       p.stats.captured++;
       delete p.intel[a.to];
-      log(s, { kind: 'battle', player: p.id, defender, tile: a.to, A, D: 0, aU: aU0, dU: dU0, aLossU: U(), dLossU: U(), aPow: round2(powerC(cfg, aU0, 'atk') * aMul), dPow: 0, aLoss: 0, dLoss: 0, loot: 0, lootKept: 0, captured: true, survivors: A, stay: tile.troops, seen: true });
+      log(s, { kind: 'battle', player: p.id, defender, tile: a.to, A, D: 0, aU: aU0, dU: dU0, aLossU: U(), dLossU: U(), aPow: round2(powerM(cfg, aU0, 'atk', aMul)), dPow: 0, aLoss: 0, dLoss: 0, loot: 0, lootKept: 0, captured: true, survivors: A, stay: tile.troops, seen: true });
       return;
     }
 
-    const dMul = defender ? garrisonDefMult(s, tile) : 1;
+    const dMul = defender ? garrisonDefVec(s, tile) : 1;
     const r = battleUnits(s, a.u, tile.u, aMul, dMul, wire);
     if (defender) gRemove(tile, r.dLossU); else { subFrom(tile.u, r.dLossU); syncTile(tile); }
     const survU = subFrom(U(a.u), r.aLossU), survivors = total(survU);
@@ -2124,8 +2202,8 @@ const Engine = (function () {
   function townAttack(s, a, tile, p, homeTown, sendBack) {
     const cfg = s.cfg, tw = s.towns[a.to], dp = s.players[tw.owner];
     const dU = fighters(tw.hu), A = a.count, D = total(dU), aU0 = U(a.u);
-    const r = D > 0 ? battleUnits(s, a.u, dU, attackMult(s, p, homeTown), defenseMult(s, dp, tw))
-      : { aPow: round2(powerC(cfg, a.u, 'atk') * attackMult(s, p, homeTown)), dPow: 0, aLoss: 0, dLoss: 0, aLossU: U(), dLossU: U() };
+    const r = D > 0 ? battleUnits(s, a.u, dU, attackVec(s, p, homeTown), defenseVec(s, dp, tw))
+      : { aPow: round2(powerM(cfg, a.u, 'atk', attackVec(s, p, homeTown))), dPow: 0, aLoss: 0, dLoss: 0, aLossU: U(), dLossU: U() };
     subFrom(tw.hu, r.dLossU); syncTown(tw);
     const survU = subFrom(U(a.u), r.aLossU), survivors = total(survU);
     let plunder = { gold: 0, food: 0 }, won = false;
@@ -2281,7 +2359,7 @@ const Engine = (function () {
         const att = s.players[incoming[0].owner];
         const have = defendersAt(s, idx);
         s.armies.filter(x => x.owner === p.id && x.to === idx && x.arrive < first).forEach(x => addTo(have, fighters(x.u)));
-        const dMul = isTown ? defenseMult(s, p, s.towns[idx]) : garrisonDefMult(s, t);
+        const dMul = isTown ? defenseVec(s, p, s.towns[idx]) : garrisonDefVec(s, t);
         const flat = isTown ? 0 : wireBonus(s, p);
         const guessA = needSoldiers(s, have, attackMult(s, att, null), dMul, flat) + 2 + Math.floor(total(have) * 0.3);
         const attU = U({ soldier: Math.min(guessA, 60) });
@@ -2404,8 +2482,9 @@ const Engine = (function () {
     if (prof.research && ageMin > 15 && tArmy >= 8 + ageMin * 0.25) {
       if (B.workshop < Math.min(cfg.buildings.workshop.max, Math.floor(ageMin / 18))) invest.push(['workshop', costOf('workshop'), () => up('workshop')]);
       else if (!tw.researching) {
-        const kind = tw.research.attack <= tw.research.defense ? 'attack' : 'defense';
-        const level = tw.research[kind] + 1;
+        const kinds = RES_KINDS.filter(k => !UNIT_UP.includes(k) || canTrain(tw, k));
+        const kind = kinds.reduce((a, b) => researchLevel(tw, b) < researchLevel(tw, a) ? b : a);
+        const level = researchLevel(tw, kind) + 1;
         if (level <= B.workshop) invest.push(['research', researchCost(s, level), () => act(Object.assign({ type: 'research', kind }, t)).ok]);
       }
     }
@@ -2449,7 +2528,7 @@ const Engine = (function () {
     // En ny by håller kvar en vakt hemma; den kan anfallas.
     const keepHome = tw.start ? 0 : 3 + Math.floor((s.time / MINUTE) / 15);
     if (!tw.start && atkAvail() <= keepHome) return;
-    const aMul = attackMult(s, p, tw);
+    const aMul = attackVec(s, p, tw);
     const busy = new Set(s.armies.filter(a => a.owner === p.id).map(a => a.to));
     const avoid = p.avoid || {};
     const myArmy = soldierCount(s, p);
@@ -2575,6 +2654,13 @@ const Engine = (function () {
       s.cfg.baseCapacity = CONFIG.baseCapacity;
       s.cfg.capacityPerLevel = CONFIG.capacityPerLevel;
       s.v = 9;
+      return migrate(s);
+    }
+    if (s.v === 9) {
+      // 9 → 10: verkstaden förbättrar enskilda trupptyper och blir snabbare per nivå.
+      s.cfg.workshopSpeedFactor = CONFIG.workshopSpeedFactor;
+      for (const k in s.towns) if (!s.towns[k].unitUp) s.towns[k].unitUp = { soldier: 0, berserker: 0, shield: 0 };
+      s.v = 10;
       return s;
     }
     if (s.v !== 6) return s;
@@ -2589,7 +2675,7 @@ const Engine = (function () {
     return migrate(s);
   }
   function isValidSave(s) {
-    return !!(s && s.v >= 6 && s.v <= 9 && s.cfg && Array.isArray(s.tiles) && s.towns && s.players && s.order && s.tiles.length === s.cfg.mapSize * s.cfg.mapSize);
+    return !!(s && s.v >= 6 && s.v <= 10 && s.cfg && Array.isArray(s.tiles) && s.towns && s.players && s.order && s.tiles.length === s.cfg.mapSize * s.cfg.mapSize);
   }
 
   // =====================================================================
@@ -2644,7 +2730,7 @@ const Engine = (function () {
   }
   function decodeView(init, v, prevLog) {
     const cfg = init.cfg, N = cfg.mapSize;
-    const s = { v: 9, cfg, seed: init.seed, rng: 0, time: v.t, nextSpawnAt: v.ns, tiles: [], towns: {}, players: {}, order: v.ord.slice(),
+    const s = { v: 10, cfg, seed: init.seed, rng: 0, time: v.t, nextSpawnAt: v.ns, tiles: [], towns: {}, players: {}, order: v.ord.slice(),
       armies: v.ar, caravans: v.cv, log: [], nextId: v.nid, winner: v.w, endedAt: v.e, online: true, view: true };
     for (let i = 0; i < N * N; i++) s.tiles.push({ x: i % N, y: Math.floor(i / N), type: CODE_TYPE[v.ty[i]], owner: null, u: U(), troops: 0, g: {}, look: init.look[i] });
     for (const r of v.tl) {
@@ -2678,7 +2764,7 @@ const Engine = (function () {
     upgradeCost, goldCap, foodCap, prodAtLevel, foodAtLevel, mineBonus, goldPerHour, foodProdPerHour,
     expToNext, skillBlock, treePoints, sendSpeed, wireBonus, returnSpeed,
     upkeepPerHour, soldierCount, trainMs, canTrain, vpPerMinute, vp,
-    researchCost, researchMs, attackMult, defenseMult,
+    researchCost, researchMs, researchLevel, attackMult, defenseMult, attackVec, defenseVec, garrisonDefVec, unitBonus, UNIT_UP, RES_KINDS,
     spawnChanceAt, nextSpawnChance, countOwned,
   };
 })();
@@ -2704,6 +2790,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     tr: null, pending: 0, pendingAt: 0, reqId: 0, lastSend: 0, on: {}, chosenSpeed: 1, lobbyId: null, joining: false, ended: false, leaving: false };
   const BEST_KEY = 'guld-och-potatis:best:v1';
   const STAY_KEY = 'guld-och-potatis:stay:v1';
+  const TRAIN_KEY = 'guld-och-potatis:train:v1';   // senast valda antal att träna
   const MIN = 60000;
   const NUMFONT = '"Barlow Condensed", "Arial Narrow", sans-serif';
 
@@ -2796,7 +2883,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   let lastReal = performance.now(), lastUi = 0, lastSave = 0;
   let toastSeen = 0, reportSeen = 0;
   // town = byn som visas under Byn och i HUD:en, sendFrom = byn trupperna skickas från i rutpanelen.
-  const ui = { tab: 'village', side: 'village', sel: -1, sendU: null, trainN: 5, trainK: 'soldier', rowSig: '', sheetSig: '', troopsSig: '', reportsSig: '', desk: false, chosenSpeed: 1, chosenRival: 'normal', confirmRecall: false, town: -1, sendFrom: -1, townSigs: {}, fwd: null, fwdSig: '', standSig: '' };
+  const ui = { tab: 'village', side: 'village', sel: -1, sendU: null, trainN: Math.max(1, Math.floor(store.get(TRAIN_KEY) || 1)), trainK: 'soldier', rowSig: '', sheetSig: '', troopsSig: '', reportsSig: '', desk: false, chosenSpeed: 1, chosenRival: 'normal', confirmRecall: false, town: -1, sendFrom: -1, townSigs: {}, fwd: null, fwdSig: '', standSig: '' };
   let incomingSeen = new Set();
   ui.stay = store.get(STAY_KEY) === true;
   const me = () => S.players[ME];
@@ -3256,9 +3343,19 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       if (t.type === 'village') {
         // Startbyar har hel ram; byar som går att anfalla har streckad ram och en etikett.
         const idx = y * N + x, tw = S.towns[idx];
-        c.strokeStyle = t.owner === ME ? 'rgba(230,180,67,.75)' : hexA(o ? o.hi : PAL.blueHi, 0.75); c.lineWidth = Math.max(1.5, w * 0.05);
+        const lw = Math.max(1.5, w * 0.05), mine = t.owner === ME;
         if (tw && !tw.start) c.setLineDash([Math.max(3, w * 0.14), Math.max(2, w * 0.09)]);
-        c.strokeRect(px + c.lineWidth / 2, py + c.lineWidth / 2, w - c.lineWidth, w - c.lineWidth);
+        if (mine) {
+          // Egna byar: ljusgrön ram med mörk kant under, så att den syns mot gräset.
+          const lw2 = Math.max(2.5, w * 0.075);
+          c.lineWidth = lw2 + 2; c.strokeStyle = 'rgba(8,20,10,.7)';
+          c.strokeRect(px + lw2 / 2 + 1, py + lw2 / 2 + 1, w - lw2 - 2, w - lw2 - 2);
+          c.lineWidth = lw2; c.strokeStyle = '#c4f58a';
+          c.strokeRect(px + lw2 / 2 + 1, py + lw2 / 2 + 1, w - lw2 - 2, w - lw2 - 2);
+        } else {
+          c.strokeStyle = hexA(o ? o.hi : PAL.blueHi, 0.75); c.lineWidth = lw;
+          c.strokeRect(px + lw / 2, py + lw / 2, w - lw, w - lw);
+        }
         c.setLineDash([]);
         if (tw && tw.start && o) drawShield(c, px, py, w, o.color);
         if (tw && t.owner === ME && fightersHome(tw) > 0) drawBadge(c, px, py, w, fightersHome(tw), o, null);
@@ -3368,7 +3465,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       case 'farm': return fmtR(E.foodAtLevel(S, L)) + ' mat/h';
       case 'barracks': return L < 1 ? 'Kan inte träna' : secs(E.trainMs(S, null, L)) + ' per trupp';
       case 'lab': return L < 1 ? 'Kan inte forska' : L >= 4 ? 'Alla trupper och utvandrare' : 'Kan låsa upp ' + ['', 'berserker', 'berserker och sköldgrabb', 'berserker, sköldgrabb och scout'][L];
-      case 'workshop': return L < 1 ? 'Kan inte förbättra' : 'Förbättringar till nivå ' + L;
+      case 'workshop': return L < 1 ? 'Kan inte förbättra' : 'Förbättringar till nivå ' + L + (L > 1 ? ', ' + Math.round((1 - Math.pow(c.workshopSpeedFactor || 1, L - 1)) * 100) + ' % snabbare' : '');
       case 'treasury': return 'Rymmer ' + fmt(c.baseCapacity + c.capacityPerLevel * L) + ' guld';
       case 'granary': return 'Rymmer ' + fmt(c.baseCapacity + c.capacityPerLevel * L) + ' mat';
     }
@@ -3421,12 +3518,13 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   function researchHTML() {
     const bonus = Math.round(S.cfg.researchBonusPerLevel * 100);
     const row = (kind, name) =>
-      '<div class="res-row"><div class="res-txt"><div class="name">' + name + '<span class="lvl" id="res-' + kind + '-lvl"></span></div><small id="res-' + kind + '-eff"></small></div>' +
+      '<div class="res-row"><div class="res-txt"><div class="name">' + (UNITS[kind] ? icon(UNITS[kind].icon, 'uic') : '') + name + '<span class="lvl" id="res-' + kind + '-lvl"></span></div><small id="res-' + kind + '-eff"></small></div>' +
       '<div class="up-wrap"><button class="btn" type="button" data-act="research" data-kind="' + kind + '" id="res-' + kind + '-btn"><span id="res-' + kind + '-txt"></span><span class="cost" id="res-' + kind + '-cost">' + goldIcon + '<span></span></span></button>' +
       '<span class="up-when" id="res-' + kind + '-when"></span></div></div>';
     return '<div class="train" id="research">' +
-      '<p class="info" id="resNone">Bygg verkstaden för att förbättra soldaternas anfall och försvar. Varje nivå ger +' + bonus + ' %, och verkstadens nivå avgör hur långt du kan gå.</p>' +
+      '<p class="info" id="resNone">Bygg verkstaden för att förbättra anfall och försvar för alla trupper, eller både anfall och försvar för en trupptyp i taget. Varje nivå ger +' + bonus + ' %, verkstadens nivå avgör hur långt du kan gå och varje verkstadsnivå gör arbetet ' + Math.round((1 - S.cfg.workshopSpeedFactor) * 100) + ' % snabbare.</p>' +
       '<div class="stack" id="resBox">' + row('attack', 'Anfall') + row('defense', 'Försvar') +
+        '<h4 class="eyebrow res-sub">Trupptyper</h4>' + row('soldier', 'Soldater') + row('berserker', 'Berserkers') + row('shield', 'Sköldgrabbar') +
         '<div class="queue" id="resQueue" hidden><div class="meter"><i id="resBar"></i></div><span id="resQText"></span></div>' +
       '</div></div>';
   }
@@ -3457,9 +3555,10 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     });
   }
   // Kasernens träning visas under Trupper, för den valda byn.
+  function setTrainN(v) { ui.trainN = clamp(Math.floor(v) || 1, 1, 9999); store.set(TRAIN_KEY, ui.trainN); }
   function buildTrain() {
     $('trainSlot').innerHTML = trainHTML();
-    $('trainN').addEventListener('input', e => { const v = parseInt(e.target.value, 10); if (v > 0) ui.trainN = Math.min(v, 9999); updateTraining(TW()); });
+    $('trainN').addEventListener('input', e => { const v = parseInt(e.target.value, 10); if (v > 0) setTrainN(v); updateTraining(TW()); });
     $('trainN').addEventListener('blur', () => { $('trainN').value = ui.trainN; });
   }
   function setText(el, txt) { if (el && el.textContent !== txt) el.textContent = txt; }
@@ -3587,7 +3686,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     $('trainNone').hidden = hasB; $('trainBox').hidden = !hasB;
     if (!hasB) return;
     const kinds = KEYS.filter(k => E.canTrain(tw, k));
-    if (!kinds.includes(ui.trainK)) { if (ui.trainK === 'settler' && ui.trainN === 1) ui.trainN = 5; ui.trainK = 'soldier'; }
+    if (!kinds.includes(ui.trainK)) ui.trainK = 'soldier';
     const seg = $('trainKinds');
     seg.hidden = kinds.length < 2;
     const segSig = kinds.join(',');
@@ -3654,16 +3753,19 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     }
   }
 
-  const KIND = { attack: 'Anfall', defense: 'Försvar' };
+  const KIND = { attack: 'Anfall', defense: 'Försvar', soldier: 'Soldater', berserker: 'Berserkers', shield: 'Sköldgrabbar' };
+  const isUnitKind = k => E.UNIT_UP.includes(k);
+  const resDone = (k, L) => '+' + Math.round(L * S.cfg.researchBonusPerLevel * 100) + ' %' + (isUnitKind(k) ? ' anfall och försvar' : '');
   function updateResearch(tw) {
     const c = S.cfg, W = tw.buildings.workshop;
     $('resNone').hidden = W > 0; $('resBox').hidden = W === 0;
     if (W === 0) return;
     const gph = E.goldPerHour(S, tw);
-    for (const kind of ['attack', 'defense']) {
-      const L = tw.research[kind], next = L + 1;
+    for (const kind of E.RES_KINDS) {
+      const L = E.researchLevel(tw, kind), next = L + 1, unit = isUnitKind(kind), locked = unit && !E.canTrain(tw, kind);
       setText($('res-' + kind + '-lvl'), 'Nivå ' + L);
-      setText($('res-' + kind + '-eff'), '+' + Math.round(L * c.researchBonusPerLevel * 100) + ' % ' + (kind === 'attack' ? 'anfallskraft' : 'försvarskraft') + (multi() ? ' för byns trupper' : ''));
+      setText($('res-' + kind + '-eff'), '+' + Math.round(L * c.researchBonusPerLevel * 100) + ' % ' +
+        (unit ? 'anfall och försvar för ' + UNITS[kind].many : (kind === 'attack' ? 'anfallskraft' : 'försvarskraft') + (multi() ? ' för byns trupper' : '')));
       const btn = $('res-' + kind + '-btn'), costEl = $('res-' + kind + '-cost');
       const max = next > c.buildings.workshop.max;
       let when = '';
@@ -3671,10 +3773,11 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
         setText($('res-' + kind + '-txt'), 'Högsta nivå'); costEl.hidden = true; btn.disabled = true;
       } else {
         const cost = E.researchCost(S, next);
-        setText($('res-' + kind + '-txt'), 'Nivå ' + next + ' · ' + dur(E.researchMs(S, next)));
+        setText($('res-' + kind + '-txt'), 'Nivå ' + next + ' · ' + dur(E.researchMs(S, next, tw)));
         costEl.hidden = false; setText(costEl.querySelector('span'), fmt(cost));
-        btn.disabled = !!tw.researching || next > W || tw.gold < cost;
+        btn.disabled = locked || !!tw.researching || next > W || tw.gold < cost;
         if (tw.researching && tw.researching.kind === kind) when = 'Pågår';
+        else if (locked) when = 'Lås upp i forskningscentret först';
         else if (next > W) when = 'Kräver verkstad nivå ' + next;
         else if (tw.researching) when = 'Verkstaden är upptagen';
         else if (tw.gold < cost) when = cost > E.goldCap(S, tw) ? 'Kräver större skattkammare' : 'Råd om ' + dur((cost - tw.gold) / gph * E.HOUR);
@@ -3713,6 +3816,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     setText($('clock'), clock(S.time));
     setText($('speedTag'), speed + '×');
     $('speedTag').classList.toggle('fast', speed > 1);
+    const guestSpeed = NET.role === 'guest';
+    $('speedDown').hidden = $('speedUp').hidden = guestSpeed;
+    $('speedDown').disabled = speed <= 1; $('speedUp').disabled = speed >= 10;
     const gc = E.goldCap(S, tw), fc = E.foodCap(S, tw);
     const suffix = multi() ? ' i ' + tw.name : '';
     let h = hud['st-gold'];
@@ -3794,7 +3900,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     const info = t.owner === ME ? null : E.visibleTroops(S, ME, idx);
     const mins = E.dist(t, S.tiles[src.idx]) / S.cfg.marchFieldsPerMinute;
     const expect = t.owner || !E.isObjective(t) ? 0 : Math.ceil(mins) * E.nextSpawnChance(S);
-    const aM = E.attackMult(S, p, src), dM = E.defenseMult(S, owner);
+    const aM = E.attackVec(S, p, src), dM = E.defenseMult(S, owner);
     const dFlat = owner && E.isObjective(t) ? E.wireBonus(S, owner) : 0;   // taggtråden syns på kartan
     const avail = nonScouts(src.hu);
     let need = null, safe = null;
@@ -4533,7 +4639,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
         '</div><p>' + foot + '</p></article>';
     }
     if (e.kind === 'trained') return small('Kasernen' + inTown(e.town) + ': ' + trupper(e.n) + ' ' + (e.n === 1 ? 'är klar' : 'är klara') + '.');
-    if (e.kind === 'research') return small('Verkstaden' + inTown(e.town) + ': ' + KIND[e.which].toLowerCase() + ' nivå ' + e.level + ' är klar (+' + Math.round(e.level * S.cfg.researchBonusPerLevel * 100) + ' %).');
+    if (e.kind === 'research') return small('Verkstaden' + inTown(e.town) + ': ' + KIND[e.which].toLowerCase() + ' nivå ' + e.level + ' är klar (' + resDone(e.which, e.level) + ').');
     if (e.kind === 'levelup') return small('Nivå ' + e.level + '. Du fick ett färdighetspoäng.');
     if (e.kind === 'unlocked') return small('Forskningscentret' + inTown(e.town) + ': ' + UNITS[e.unit].name.toLowerCase() + ' är upplåst. Träna dem i kasernen.');
     if (e.kind === 'reinforce') {
@@ -4664,7 +4770,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
     toastSeen = reportSeen = last ? last.id : 0;
     incomingSeen = new Set(S.armies.map(a => a.id));
     ui.sel = -1; ui.sheetSig = ui.troopsSig = ui.reportsSig = ui.townSig = ''; ui.confirmRecall = false;
-    ui.trainN = 5; ui.trainK = 'soldier'; ui.sendU = E.U();
+    ui.trainK = 'soldier'; ui.sendU = E.U();
     ui.town = ui.sendFrom = S.players[ME].village;
     cam.ready = false;
     if (!$('ledger').children.length) buildLedger();
@@ -4824,12 +4930,12 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
         break;
       }
       case 'pause': setPaused(!paused); break;
-      case 'speed': {
+      case 'speed-up': case 'speed-down': {
         if (NET.role === 'guest') break;   // online bestämmer värden
         const steps = [1, 2, 5, 10];
-        speed = steps[(steps.indexOf(speed) + 1) % steps.length] || 1;
+        const i = steps.indexOf(speed) < 0 ? 0 : steps.indexOf(speed);
+        speed = steps[clamp(i + (act === 'speed-up' ? 1 : -1), 0, steps.length - 1)];
         ui.chosenSpeed = speed;
-        $('speedTag').setAttribute('aria-label', 'Hastighet ' + speed + '×. Klicka för att byta.');
         if (NET.role === 'host' && NET.lobby) { NET.lobby.speed = speed; NET.lastSend = 0; roomChanged(); }
         updateHUD(); save();
         break;
@@ -4877,14 +4983,11 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
         dispatch({ type: 'upgrade', town: TW().idx, building: b.dataset.b });
         break;
       }
-      case 'tminus': ui.trainN = Math.max(1, ui.trainN - 1); updateTraining(TW()); break;
-      case 'tplus': ui.trainN = Math.min(9999, ui.trainN + 1); updateTraining(TW()); break;
-      case 'tmax': ui.trainN = Math.max(1, Math.floor(TW().gold / S.cfg.units[ui.trainK].cost)); updateTraining(TW()); break;
+      case 'tminus': setTrainN(ui.trainN - 1); updateTraining(TW()); break;
+      case 'tplus': setTrainN(ui.trainN + 1); updateTraining(TW()); break;
+      case 'tmax': setTrainN(Math.floor(TW().gold / S.cfg.units[ui.trainK].cost)); updateTraining(TW()); break;
       case 'tkind': {
-        const was = ui.trainK;
         ui.trainK = b.dataset.unit;
-        if (ui.trainK === 'settler') ui.trainN = 1;
-        else if (was === 'settler' && ui.trainN === 1) ui.trainN = 5;
         updateTraining(TW());
         break;
       }
@@ -5693,8 +5796,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
   function onlineChrome() {
     const on = !!(S && S.online);
     $('pauseBtn').hidden = NET.role === 'guest';
-    $('speedTag').disabled = NET.role === 'guest';
-    $('speedTag').title = NET.role === 'guest' ? 'Värden bestämmer hastigheten.' : 'Byt hastighet: 1×, 2×, 5×, 10×' + (on ? '. Gäller alla spelare.' : '');
+    $('speedTag').title = NET.role === 'guest' ? 'Värden bestämmer hastigheten.' : 'Speltempo: 1×, 2×, 5× eller 10×' + (on ? '. Gäller alla spelare.' : '');
   }
 
   // Håll liv i anslutningarna. Ingen kontakt på 20 s räknas som frånkopplad.
@@ -5733,11 +5835,11 @@ if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
       '<b>Sänd vidare</b>: från ett av dina objektiv kan du skicka trupper vidare till ett annat av dina objektiv eller till vilken som helst av dina byar. Tryck på Sänd vidare trupper och sedan på målet på kartan. Till en by flyttar trupperna in och tillhör sedan den byn. Det fungerar bara som förstärkning: är ett objektiv inte ditt när trupperna kommer fram går de hem i stället för att anfalla.',
       '<b>Spaning</b>: skickar du bara scouter dödar de ingen och tar ingen ruta. Överlever någon får du se vilka trupper som står där, och i en by även hur mycket guld och mat som finns. Ägaren ser inte scouterna komma men får en rapport efteråt. Försvarande scouter dödar anfallande scouter med samma regler som en vanlig strid.',
       '<b>Erfarenhet</b>: ' + c.expPerPlayerKill + ' exp per dödad fiendetrupp och ' + c.expPerNeutralKill + ' per dödad neutral soldat. Första nivån kräver ' + c.expFirstLevel + ' exp och varje ny nivå ' + Math.round((c.expGrowth - 1) * 100) + ' % mer. Varje nivå ger ett poäng i färdighetsträden anfall, försvar och ekonomi.',
-      'I <b>verkstaden</b> förbättrar du anfall och försvar för byns trupper med +' + Math.round(c.researchBonusPerLevel * 100) + ' % per nivå. En förbättring i taget, och verkstadens nivå sätter taket.',
+      'I <b>verkstaden</b> förbättrar du anfall och försvar för alla byns trupper med +' + Math.round(c.researchBonusPerLevel * 100) + ' % per nivå, eller både anfall och försvar för en trupptyp i taget (soldat, berserker, sköldgrabb). Varje sak kan förbättras en gång per verkstadsnivå, en förbättring i taget, och varje verkstadsnivå gör arbetet ' + Math.round((1 - c.workshopSpeedFactor) * 100) + ' % snabbare.',
       '<b>Två rivaler</b> bygger sina byar på kartan och spelar efter samma regler, dimman inräknad. De anfaller dig och varandra och grundar så småningom egna byar. En rivals trupper ger inget guld.',
       '<b>Kalla hem alla</b> under Trupper tar hem trupperna som står på dina objektiv, var och en till sin egen by. Trupper som redan är på väg fortsätter.',
       'Först till <b>' + c.vpToWin + ' vinstpoäng</b> vinner.',
-      '<b>Online</b>: 2–4 spelare. En spelare skapar en lobby, väljer hastighet och kan fylla på med bottar; de andra går med under Spela online. Värden kör spelet och kan ändra hastigheten under spelets gång, så det går bara medan värden har det öppet. Tappar du anslutningen kan du återansluta, och värden kan fortsätta ett sparat onlinespel senare.',
+      '<b>Online</b>: 2–4 spelare och ett monument mer än antalet spelare. En spelare skapar en lobby, väljer hastighet och kan fylla på med bottar; de andra går med under Spela online. Värden kör spelet och kan ändra hastigheten under spelets gång, så det går bara medan värden har det öppet. Tappar du anslutningen kan du återansluta, och värden kan fortsätta ett sparat onlinespel senare.',
     ].map(x => '<li>' + x + '</li>').join('');
   }
   $('rulesStart').innerHTML = rulesHTML();
