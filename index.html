@@ -2069,8 +2069,9 @@ const Engine = (function () {
     if (week) { s.week = true; s.nextSpawnAt = MINUTE * cfg.pace; }
     // Rund karta. Bland några varianter väljs en där byarna inte ligger för nära kullen eller varandra.
     const K = slots;
-    let M = null, mseed = seed, bestSc = -Infinity;
-    for (let tr = 0; tr < (week ? 16 : 8); tr++) {
+    let M = null, mseed = seed, bestSc = -Infinity, bestEq = false;
+    for (let tr = 0; tr < 48; tr++) {
+      if (tr >= (week ? 16 : 8) && bestEq) break;   // fler försök bara om ingen variant hittills gett lika avstånd till kullen
       const sd = (seed + tr * 7919) | 0, m = genMapRound(sd, n, K, cfg, core);
       const N = m.regions.length, hop = a => { const d = new Array(N).fill(99); d[a] = 0; const q = [a]; for (let h = 0; h < q.length; h++) for (const j of m.regions[q[h]].adj) if (d[j] === 99) { d[j] = d[q[h]] + 1; q.push(j); } return d; };
       const d1 = hop(1), vh = d1[0], vv = K > 1 ? Math.min(...Array.from({ length: K - 1 }, (x, i) => d1[i + 2])) : 9;
@@ -2079,7 +2080,9 @@ const Engine = (function () {
       // Veckospelet: varje byplats rutor (med kullen) måste hänga ihop, eftersom grannplatserna kan vara hav.
       // Veckospelet: varje byplats rutor måste hänga ihop med kullen och basen även när grannplatserna är hav,
       // och alla byar ska ha lika långt till kullen.
-      let apart = 0;
+      // Alla byar ska ha lika många steg till kullen.
+      const dv = Array.from({ length: K }, (x, i) => i ? hop(1 + i)[0] : vh), uneq = Math.max(...dv) - Math.min(...dv);
+      let apart = uneq * 3;
       if (week) {
         const baseOf = baseGroups(m, K, week.base || 0), dh = [];
         for (let j = 0; j < (core ? K : 1); j++) {
@@ -2097,9 +2100,11 @@ const Engine = (function () {
         for (let h = 0; h < q2.length; h++) for (const x of m.regions[q2[h]].adj) if (bs.has(x) && !seen.has(x)) { seen.add(x); q2.push(x); }
         apart += bs.size - seen.size;
         apart += (Math.max(...dh) - Math.min(...dh)) * 2;
+        apart += Math.max(0, dh[0] - vh) * 3;   // vägen genom den egna delen får inte vara längre än genom grannarnas
       }
       const sc = Math.min(vh, 3) * 10 + Math.min(vv, vvMin) * 10 - Math.max(0, maxDeg - 6) * 5 - Math.max(0, vh - vhMax) * 3 - apart * 100;
-      if (sc > bestSc) { bestSc = sc; M = m; mseed = sd; }
+      const eq = !uneq && (!week || !apart);
+      if ((eq && !bestEq) || ((eq || !bestEq) && sc > bestSc)) { bestSc = sc; M = m; mseed = sd; bestEq = eq; }
       if (vh >= 3 && vh <= vhMax && vv >= vvMin && maxDeg <= 6 && !apart) break;
     }
     s.map = { seed: mseed, n, k: K, core, shape: 'round', w: M.w, h: M.h, c: M.c, blocked: M.blocked };
@@ -2132,6 +2137,17 @@ const Engine = (function () {
       syncTile(t);
     });
     s.map.ncount = counts;
+    // Minst en guldgruva per spelare: blev det inga väljs ett varv av rutor (en ruta i varje spelares del).
+    if (cfg.regionMine && !s.tiles.some(t => t.mine)) {
+      const ok = g => { const i = 1 + K + g * K, t = s.tiles[i]; return t && !t.core && !t.hill && t.type !== 'village' && !nearVillage(i); };
+      const gs = Object.keys(counts).map(Number).filter(ok);
+      const pref = gs.filter(g => !s.tiles[1 + K + g * K].base);
+      const list = pref.length ? pref : gs;
+      if (list.length) {
+        const g = list[Math.floor(rand(s) * list.length)];
+        for (let j = 0; j < K; j++) { const t = s.tiles[1 + K + g * K + j]; if (t && !t.core && t.type !== 'village') t.mine = true; }
+      }
+    }
     if (humans) {
       const taken = new Set();
       humans.forEach((h, i) => {
@@ -2514,13 +2530,33 @@ const Engine = (function () {
     if (loot && (loot.gold || loot.food)) a.loot = loot;   // plundrat guld och mat på väg hem
     return a;
   }
-  // Efter ett anfall: tillbaka till rutan de kom ifrån (genom egna rutor). Är den inte din längre går de hem till byn.
-  function sendBack(s, p, from, src, u, loot) {
-    if (total(u) <= 0) return;
-    const st = s.tiles[src];
-    const path = st && src !== from && isMine(st, p.id) ? route(s, p.id, from, src) : null;
-    if (!path) { sendHome(s, p, from, u, loot); return; }
+  // Närmaste ruta som spelaren kontrollerar (byn räknas), sett från rutan `from`, längs en väg genom egna rutor.
+  // Vid lika avstånd väljs `prefer` (rutan trupperna kom ifrån), annars den med lägst nummer. −1 om ingen går att nå.
+  function nearestOwn(s, pid, from, prefer) {
+    const n = s.tiles.length, dist = new Int16Array(n).fill(-1), q = [from];
+    dist[from] = 0;
+    let best = -1, bd = Infinity;
+    for (let h = 0; h < q.length; h++) {
+      const i = q[h];
+      if (dist[i] >= bd) break;
+      for (const j of s.tiles[i].adj) {
+        if (dist[j] >= 0 || s.tiles[j].owner !== pid) continue;
+        dist[j] = dist[i] + 1;
+        if (dist[j] < bd || (dist[j] === bd && j !== best && (j === prefer || (best !== prefer && j < best)))) { bd = dist[j]; best = j; }
+        q.push(j);
+      }
+    }
+    return best;
+  }
+  // Trupper som inte kan stanna (efter ett anfall, eller när rutan de skulle till inte är din längre)
+  // går till närmaste ruta du kontrollerar. Finns ingen går de hem till byn. Returnerar målet.
+  function retreat(s, p, from, u, loot, prefer) {
+    if (total(u) <= 0) return -1;
+    const to = nearestOwn(s, p.id, from, prefer);
+    const path = to >= 0 ? route(s, p.id, from, to) : null;
+    if (!path) { sendHome(s, p, from, u, loot); return p.village; }
     s.armies.push(makeArmy(s, p.id, path, legsFor(s, p, path, false), u, 'move', loot));
+    return to;
   }
   // Skicka trupper hem till byn (genom egna rutor, annars den kortaste vägen).
   function sendHome(s, p, from, u, loot) {
@@ -2964,9 +3000,9 @@ const Engine = (function () {
       return;
     }
     if (a.kind === 'move' || (t.type === 'village' && !t.owner)) {
-      // Förflyttningen kom fram till en ruta som inte längre är din: hem till byn igen.
-      sendHome(s, p, a.to, a.u, a.loot);
-      log(s, { kind: 'moveFail', player: p.id, n: a.count, tile: a.to, back: p.village });
+      // Förflyttningen kom fram till en ruta som inte längre är din: till närmaste ruta du kontrollerar.
+      const back = retreat(s, p, a.to, a.u, a.loot, a.from);
+      log(s, { kind: 'moveFail', player: p.id, n: a.count, tile: a.to, back });
       return;
     }
     if (t.type === 'village') { villageRaid(s, a, t, p); return; }
@@ -2994,7 +3030,7 @@ const Engine = (function () {
     }
     const expA = r.dLoss * (defender === null ? cfg.expPerNeutralKill : cfg.expPerPlayerKill);
     const expD = dp ? r.aLoss * cfg.expPerPlayerKill : 0;
-    let captured = false, occupied = false, postLvl = null, wallLvl = 0, razeLoot = 0, razeKept = 0, stay = 0;
+    let captured = false, occupied = false, postLvl = null, wallLvl = 0, razeLoot = 0, razeKept = 0, stay = 0, back = -1;
     if (t.troops === 0 && survivors > 0) {
       // Vunnet. Du är den som senast tog rutan och kan bygga en egen utpost där. Hade en motspelare
       // en utpost (och mur) där förstörs den, och du får hälften av vad den kostat som byte.
@@ -3013,11 +3049,11 @@ const Engine = (function () {
       } else occupied = true;
       t.owner = null; t.occ = p.id; p.stats.occupied++; delete t.held;
       if (a.stay) { t.u = U(survU); syncTile(t); stay = survivors; }
-      else { t.u = U(); syncTile(t); sendBack(s, p, a.to, a.from, survU); }
+      else { t.u = U(); syncTile(t); back = retreat(s, p, a.to, survU, null, a.from); }
     }
     log(s, { kind: 'battle', player: p.id, defender, tile: a.to, from: a.from, A, D,
       aU: aU0, dU: dU0, aLossU: r.aLossU, dLossU: r.dLossU, aPow: r.aPow, dPow: r.dPow, aLoss: r.aLoss, dLoss: r.dLoss,
-      loot, lootKept, captured, occupied, postLvl, wallLvl, razeLoot, razeKept, survivors, stay, flat: def.flat, expA, expD });
+      loot, lootKept, captured, occupied, postLvl, wallLvl, razeLoot, razeKept, survivors, stay, back, flat: def.flat, expA, expD });
     gainExp(s, p, expA);
     gainExp(s, dp, expD);
   }
@@ -3038,13 +3074,13 @@ const Engine = (function () {
       plunder = plunderOf(carryCapacity(s, survU), tw.gold, tw.food);
       tw.gold -= plunder.gold; tw.food -= plunder.food;
     }
-    sendBack(s, p, a.to, a.from, survU, won ? plunder : null);
+    const back = retreat(s, p, a.to, survU, won ? plunder : null, a.from);
     p.stats.battles++; p.stats.killed += r.dLoss; p.stats.lost += r.aLoss;
     p.stats.killAtk = (p.stats.killAtk || 0) + r.dLoss;
     if (dp) { dp.stats.battles++; dp.stats.lost += r.dLoss; dp.stats.killed += r.aLoss; dp.stats.killDef = (dp.stats.killDef || 0) + r.aLoss; }
     const expA = r.dLoss * cfg.expPerPlayerKill, expD = r.aLoss * cfg.expPerPlayerKill;
     log(s, { kind: 'raid', player: p.id, defender: tw.owner, tile: a.to, from: a.from, A, D, aU: aU0, dU, aLossU: r.aLossU, dLossU: r.dLossU,
-      aPow: r.aPow, dPow: r.dPow, aLoss: r.aLoss, dLoss: r.dLoss, survivors, won, plunder, flat: def.flat, wall: tw.buildings.wall || 0, expA, expD });
+      aPow: r.aPow, dPow: r.dPow, aLoss: r.aLoss, dLoss: r.dLoss, survivors, won, plunder, back, flat: def.flat, wall: tw.buildings.wall || 0, expA, expD });
     gainExp(s, p, expA);
     gainExp(s, dp, expD);
   }
@@ -3469,7 +3505,7 @@ const Engine = (function () {
     CONFIG, VERSION, MINUTE, HOUR, UNIT_KEYS, ATK, DEF,
     initFor, encodeView, decodeView, logRelevant,
     createGame, apply, step, advance, isValidSave, migrate, botThink, atMax,
-    hillDef, hillStepMs, VIS_BLD,
+    hillDef, hillStepMs, VIS_BLD, nearestOwn,
     genMapRound, roundRegionCount, postValue, defensePoints, immune, carryCapacity, plunderOf, addWeekBot, freeSlots, joinBonus, buildMs, buildPending, unlockMs, mineGoldPerHour, activateSlot, DAY, U, total, addTo, subFrom, pick, give, armyUnits, townUnits, visibleTroops, defendersAt, canSee, isMine, PLOTS,
     town, townsOf, mapGrid, genMap, hops, adjacent, attackBlock, attackSources, srcUnits, sendMs, attackMs, hopMs, moveMs, route, plan,
     battleUnits, fillAttack, needSoldiers, armyPos, tileDefense, postDef, wallBonus, wireBonus, postUpCost, postWallCost,
@@ -4712,7 +4748,13 @@ window.GP_EN = {
 ", ": ", ",
 " om ": " in ",
 " Muren byggs för sig på ringen runt byn och syns både i byn och på kartan.": " The wall is built separately on the ring around the village and shows both in the village and on the map.",
-"Nu: ": "Now: "
+"Nu: ": "Now: ",
+" går till ": " go to ",
+", men rutan var inte din längre. De går till ": ", but the territory was no longer yours. They are going to ",
+"Är rutan inte din när trupperna kommer fram går de till närmaste ruta du kontrollerar.": "If the territory isn't yours when the troops arrive, they go to the nearest territory you control.",
+" för sista steget in i striden. Efter striden går de överlevande till närmaste ruta du kontrollerar, om du inte kryssar i att de ska stanna och försvara rutan.": " for the final step into battle. After the battle the survivors go to the nearest territory you control, unless you tick the box to have them stay and defend the territory.",
+" per ruta på vägen. Är rutan inte din när trupperna kommer fram går de till närmaste ruta du kontrollerar.": " per territory on the way. If the territory isn't yours when they arrive, they go to the nearest territory you control.",
+"Ingångar från ": "Entrances from "
 };
 window.GP_EN_BODY = {
 "Tomter i byn": "Plots in the village",
@@ -6027,17 +6069,35 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         hill.knolls.push({ x, y, r, p: blob(0, 0, 3 + q, x, y, r) });
       }
       hill.knolls.sort(byY);
-      // Trampad stig från foten upp till toppen.
-      const [px0, py0] = onMound(0.42 * Math.PI, 0.97), path = new Path2D();
-      path.moveTo(px0, py0);
-      path.bezierCurveTo(cx + 0.62 * R, cy + 0.3 * R, cx - 0.5 * R, cy + 0.1 * R, cx - 0.16 * R, cy - 0.16 * R);
-      path.quadraticCurveTo(cx + 0.02 * R, cy - 0.28 * R, sx, sy);
+      // Ingångar: varje granne man kan gå till från kullen (bergen stänger resten). En trampad stig går
+      // från toppen ut genom gränsen, och två stenpelare står där den passerar gränsen.
+      const bpts = {};
+      for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+        if (lab[y * gw + x] !== hI) continue;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const j = L(x + dx, y + dy);
+          if (j < 0 || j === hI || !t.adj.includes(j)) continue;
+          (bpts[j] = bpts[j] || []).push([(x + 0.5 + dx * 0.5) / C, (y + 0.5 + dy * 0.5) / C]);
+        }
+      }
+      const path = new Path2D(), samples = [];
+      hill.ent = t.adj.filter(j => bpts[j]).map(j => {
+        const ps = bpts[j], mx = ps.reduce((a, q) => a + q[0], 0) / ps.length, my = ps.reduce((a, q) => a + q[1], 0) / ps.length;
+        const [ex, ey] = ps.reduce((b, q) => Math.hypot(q[0] - mx, q[1] - my) < Math.hypot(b[0] - mx, b[1] - my) ? q : b, ps[0]);
+        const len = Math.hypot(ex - sx, ey - sy) || 1, nx = (ex - sx) / len, ny = (ey - sy) / len;
+        const bend = (hsh(sd, j, 95) - 0.5) * 0.5 * len, qx = (sx + ex) / 2 - ny * bend, qy = (sy + ey) / 2 + nx * bend;
+        const ox = ex + nx * 0.8, oy = ey + ny * 0.8;
+        path.moveTo(sx, sy + 0.12); path.quadraticCurveTo(qx, qy, ex, ey); path.lineTo(ox, oy);
+        for (let k = 0; k <= 14; k++) { const u = k / 14, w = 1 - u; samples.push([w * w * sx + 2 * w * u * qx + u * u * ex, w * w * (sy + 0.12) + 2 * w * u * qy + u * u * ey]); }
+        return { j, x: ex, y: ey, nx, ny };
+      });
       hill.path = path;
+      const offPath = (x, y, d) => samples.every(([px, py]) => Math.hypot(x - px, y - py) > d);
       hill.dirt = [0, 1, 2, 3, 4, 5, 6].map(q => { const [x, y] = onMound(hsh(sd, q, 72) * TAU, 0.2 + hsh(sd, q, 73) * 0.6); return [x, y, 0.2 + hsh(sd, q, 74) * 0.3, 0.09 + hsh(sd, q, 75) * 0.1]; });
       hill.deco = [];
       for (let q = 0; q < 80 && hill.deco.length < 10 + R * 3; q++) {
         const [x, y] = onMound(hsh(sd, q, 76) * TAU, 0.15 + hsh(sd, q, 77) * 0.8);
-        if (!okCell(x, y, 2) || !away(x, y, sx, sy, 0.4)) continue;
+        if (!okCell(x, y, 2) || !away(x, y, sx, sy, 0.4) || !offPath(x, y, 0.35)) continue;
         hill.deco.push({ k: hsh(sd, q, 78) < 0.65 ? 'tuft' : 'stone', v: Math.floor(hsh(sd, q, 79) * 3), x, y, sc: 0.7 + hsh(sd, q, 80) * 0.4 });
       }
       // Stenar som sticker fram i avsatsernas kanter.
@@ -6058,7 +6118,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         if (!okCell(x, y, 2)) continue;
         // Fritt kring flaggan, truppernas siffra (högra sidan) och en utpost (vänstra sidan).
         if (!away(x, y, sx, sy, 0.75) || !away(x, y, t.x + 1.05, t.y + 0.35, 0.6) || !away(x, y, t.x + 0.66, t.y + 0.22, 0.6) || !away(x, y, t.x - 1.3, t.y + 0.2, 0.65)) continue;
-        if (rel.some(o => !away(x, y, o.x, o.y, 0.55 * kR))) continue;
+        if (rel.some(o => !away(x, y, o.x, o.y, 0.55 * kR)) || !offPath(x, y, 0.45)) continue;
         const k = kinds[rel.length % kinds.length], hr = hsh(sd, q, 83);
         let rot = (hr - 0.5) * 0.9;
         if (k === 'sword') rot = (hr - 0.5) * 0.8;
@@ -6109,11 +6169,28 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     g.addColorStop(0, 'rgba(8,14,4,.26)'); g.addColorStop(1, 'rgba(8,14,4,0)');
     c.fillStyle = g; c.fill(H.p0);
     H.dirt.forEach(([x, y, rx, ry]) => { ell(c, x, y, rx, ry, 'rgba(112,88,56,.45)'); ell(c, x - rx * 0.2, y - ry * 0.2, rx * 0.55, ry * 0.5, 'rgba(150,124,84,.32)'); });
-    c.lineCap = 'round';
-    c.strokeStyle = 'rgba(104,82,52,.85)'; c.lineWidth = 0.2; c.stroke(H.path);
-    c.strokeStyle = 'rgba(166,142,98,.65)'; c.lineWidth = 0.08; c.stroke(H.path);
     if (s >= 5) H.deco.forEach(d => { if (d.k !== 'tuft' || s >= 9) drawSprite(c, d.k, d.v, d.x, d.y, d.sc, ppu); });
     c.restore();
+    // Stigarna till ingångarna går ut över gränsen, så att man ser var man kommer in på kullen.
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    c.strokeStyle = 'rgba(70,54,34,.75)'; c.lineWidth = 0.42; c.stroke(H.path);
+    c.strokeStyle = 'rgba(176,150,104,.95)'; c.lineWidth = 0.28; c.stroke(H.path);
+    c.strokeStyle = 'rgba(214,196,150,.55)'; c.lineWidth = 0.1; c.stroke(H.path);
+  }
+  // Kullens ingångar: två stenpelare där stigen passerar gränsen (ovanpå ägarens färg, så att de syns).
+  function drawHillGates(c, H, s) {
+    if (!H.ent || s < 5) return;
+    const pillar = (x, y) => {
+      ell(c, x + 0.05, y + 0.02, 0.14, 0.05, 'rgba(10,10,6,.35)');
+      c.fillStyle = '#8d918c'; c.beginPath(); c.moveTo(x - 0.075, y); c.lineTo(x - 0.06, y - 0.4); c.lineTo(x + 0.06, y - 0.4); c.lineTo(x + 0.075, y); c.closePath(); c.fill();
+      c.fillStyle = '#6c706b'; c.fillRect(x + 0.01, y - 0.4, 0.055, 0.4);
+      c.strokeStyle = '#2c2e2b'; c.lineWidth = 0.025; c.stroke();
+      ell(c, x, y - 0.42, 0.085, 0.04, '#b4b8b1'); c.stroke();
+    };
+    for (const e of H.ent) {
+      const px = -e.ny, py = e.nx, d = 0.34;
+      [[e.x + px * d, e.y + py * d], [e.x - px * d, e.y - py * d]].sort((a, b) => a[1] - b[1]).forEach(([x, y]) => pillar(x, y));
+    }
   }
   // Ovanpå ägarens färg: svärd, skallar, hjälmar och annat från gamla strider, och flaggan på toppen.
   function drawHillTop(c, H, s) {
@@ -6217,6 +6294,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     });
     // Guldgruvor (ovanpå ägarens färg så att de syns tydligt, men i kartans lager så att de följer rutan).
     for (const m of D.mines) if (vis[m.i]) drawSprite(c, 'mine', 0, m.x, m.y, MINE_K, ppu);
+    if (D.hill) drawHillGates(c, D.hill, s);
     // Gränser: en bildpunkt breda (går fort att rita).
     c.strokeStyle = 'rgba(16,24,16,.72)'; c.lineWidth = Math.max(1, ppu / s * 0.9) / ppu; c.stroke(sh.coast);
     // Dina rutor: ljusgrön kant innanför.
@@ -7282,7 +7360,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   }
   function hillTxt(t) {
     const h = S.cfg.hill.def || E.CONFIG.hill.def, step = E.hillStepMs(S);
-    let txt = TR('<b>Kullen.</b> Vinstpoäng: ') + vpTxt(t) + '. ' + hillRule(h, step) + ' ';
+    let txt = TR('<b>Kullen.</b> Vinstpoäng: ') + vpTxt(t) + '. ' + TR('Ingångar från ') + listNames(t.adj.map(j => esc(rname(S.tiles[j])))) + '. ' + hillRule(h, step) + ' ';
     if (!t.owner) return txt + TR('Ingen håller kullen just nu.');
     const held = Math.max(0, S.time - (t.held != null ? t.held : S.time)), cur = E.hillDef(S, t);
     txt += (t.owner === ME ? TR('Du har hållit den i ') : esc(nameOf(t.owner)) + TR(' har hållit den i ')) + durWords(held) + '. ' + TR('Nu: ') + '<b>' + pcs(cur) + '</b>';
@@ -7526,7 +7604,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     $('fwdInfo').innerHTML = f.to < 0 ? TR('Välj mål i listan eller tryck på en ruta på kartan. En ruta du inte kontrollerar blir ett anfall.') :
       atk ? forecast(S.tiles[f.to], f.u, needs(f.to, unitsAt(f.from)), f.from, f.to, false, false) :
       TR('Mål: <b>') + esc(rname(S.tiles[f.to])) + TR('</b>. Framme om <b>') + dur(E.sendMs(S, ME, f.from, f.to)) + '</b> (' + steg(routeSteps(f.from, f.to)) + '). ' +
-      TR('Är rutan inte din när trupperna kommer fram går de hem till byn.');
+      TR('Är rutan inte din när trupperna kommer fram går de till närmaste ruta du kontrollerar.');
     const btn = $('fwdSend');
     btn.disabled = f.to < 0 || n < 1;
     btn.classList.toggle('attack', atk);
@@ -7687,11 +7765,11 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if (dPow > aPow) return { a: aPow, d: Math.round((aPow + dPow) / 2 * 100) / 100 };
     return { a: aPow, d: dPow };
   }
-  // "går tillbaka till X" (eller hem till byn).
-  function backTo(n, from) {
-    const ft = S.tiles[from];
-    if (!ft || ft.type === 'village') return trupper(n) + TR(' går hem till byn.');
-    return trupper(n) + TR(' går tillbaka till ') + esc(rname(ft)) + '.';
+  // Vart trupperna går: "går till X" (närmaste ruta du kontrollerar) eller hem till byn.
+  function backTo(n, dest) {
+    const ft = S.tiles[dest];
+    if (!ft || (ft.type === 'village' && ft.owner === ME)) return trupper(n) + TR(' går hem till byn.');
+    return trupper(n) + TR(' går till ') + esc(rname(ft)) + '.';
   }
   // Prognos: anfallspoäng, uppskattade försvarspoäng, förväntade förluster (tydligt) och om rutan tas.
   function forecast(t, sel, n, from, to, stay, sim) {
@@ -7720,7 +7798,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       if (village) foot.push(TR('Bär hem upp till ') + E.carryCapacity(S, E.subFrom(E.U(sel), r.aLossU)) + TR(' guld och mat'));
       else if (t.owner && t.post) foot.push(TR('Utposten förstörs: +') + Math.floor(E.postValue(S, t.post) * (S.cfg.razeLoot || 0.5)) + TR(' guld'));
       if (!t.owner && !t.occ && r.dLoss) foot.push('+' + r.dLoss * S.cfg.killReward + TR(' guld'));
-      foot.push(stay && !village ? trupper(surv) + TR(' stannar') : backTo(surv, from).replace(/\.$/, ''));
+      foot.push(stay && !village ? trupper(surv) + TR(' stannar') : backTo(surv, E.nearestOwn(S, ME, to, from)).replace(/\.$/, ''));
     }
     if (n.op) foot.push(esc(pname(n.op)) + TR(' kan hinna förstärka'));
     return html + '<p class="fc-foot">' + foot.join(' · ') + '.</p>';
@@ -7977,7 +8055,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       '<span class="loss-sum">' + (lost ? TR('Förlorade: ') + lost + TR(' av ') + all : TR('Inga förluster')) + '</span></div>';
   }
   // Vart de överlevande tog vägen efter ett vunnet anfall.
-  const backTxt = e => !e.survivors ? '' : e.stay ? trupper(e.survivors) + TR(' stannar och försvarar rutan.') : e.from != null ? backTo(e.survivors, e.from) : trupper(e.survivors) + TR(' går hem till byn.');
+  const backTxt = e => !e.survivors ? '' : e.stay ? trupper(e.survivors) + TR(' stannar och försvarar rutan.') : e.back != null ? backTo(e.survivors, e.back) : e.from != null ? backTo(e.survivors, e.from) : trupper(e.survivors) + TR(' går hem till byn.');
   // Motspelarens utpost som förstördes, och bytet.
   const razeTxt = e => !e.postLvl ? '' : (e.wallLvl ? TR('Utposten och muren förstördes. ') : TR('Utposten förstördes. ')) + (e.razeLoot ? '<b>+' + fmt(e.razeKept) + TR(' guld</b> i byte') + (e.razeKept < e.razeLoot ? ' (' + fmt(e.razeLoot - e.razeKept) + TR(' fick inte plats)') : '') + '. ' : '');
   function reportHTML(e) {
@@ -8039,7 +8117,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     }
     if (e.kind === 'lootHome') return small(TR('Bytet är hemma: +') + fmt(e.kept.gold) + TR(' guld och +') + fmt(e.kept.food) + TR(' mat') + ((e.kept.gold + e.kept.food) < (e.loot.gold + e.loot.food) ? TR(' (resten fick inte plats)') : '') + '.');
     if (e.kind === 'built') return small(TR('Utpost byggd i ') + name + TR('. Rutan är din.'));
-    if (e.kind === 'moveFail') return small(trupper(e.n) + TR(' skulle till ') + name + TR(', men rutan var inte din längre. De går hem till byn.'), 'alert');
+    if (e.kind === 'moveFail') { const bt = S.tiles[e.back]; return small(trupper(e.n) + TR(' skulle till ') + name + (!bt || bt.type === 'village' ? TR(', men rutan var inte din längre. De går hem till byn.') : TR(', men rutan var inte din längre. De går till ') + rname(bt) + '.'), 'alert'); }
     if (e.kind === 'trained') return small(TR('Barracken') + ': ' + trupper(e.n) + ' ' + (e.n === 1 ? TR('är klar') : TR('är klara')) + '.');
     if (e.kind === 'research') return small(TR('Verkstaden') + ': ' + KIND[e.which].toLowerCase() + TR(' nivå ') + e.level + TR(' är klar (') + resDone(e.which, e.level) + ').');
     if (e.kind === 'levelup') return small(TR('Nivå ') + e.level + TR('. Du fick ett färdighetspoäng.'));
@@ -9252,8 +9330,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       TR('<b>Kartan</b> är en rund ö med ojämna rutor som slumpas fram för varje match, ') + c.regionsPerPlayer + TR(' per spelare. Ön är likadan runt om, så alla byar har samma avstånd till varandra och till kullen. Mörka bergskanter mellan två rutor går inte att passera.'),
       TR('Varje ruta du kontrollerar, byn inräknad, ger <b>1 vinstpoäng per ') + D(c.vpPerRegionMinutes * pc * MIN) + '</b>. ' + (c.vpToWin ? TR('Först till <b>') + c.vpToWin + TR(' vinstpoäng</b> vinner.') : TR('Flest vinstpoäng när tiden är ute vinner.')),
       TR('<b>Kullen</b> med flaggan ligger mitt på kartan, lika långt från alla byar. Den som kontrollerar den får <b>1 vinstpoäng per ') + D(pc / c.hill.vpPerMinute * MIN) + TR('</b>. Den börjar med ') + c.hill.startNeutrals + TR(' neutrala soldater.') + ' ' + hillRule(c.hill.def || E.CONFIG.hill.def, (c.hill.def || E.CONFIG.hill.def).every * MIN * pc),
-      TR('Du kan <b>anfalla</b> en ruta som gränsar till en ruta du kontrollerar, från valfri ruta där du har trupper. Trupperna går aldrig fågelvägen utan alltid genom dina egna rutor: ') + D(hop) + TR(' per ruta på vägen och ') + D(atk) + TR(' för sista steget in i striden. Efter striden går de överlevande tillbaka till rutan de kom ifrån (är den inte din längre går de hem till byn), om du inte kryssar i att de ska stanna och försvara rutan.'),
-      TR('<b>Förstärkning</b> kan skickas till vilken ruta du kontrollerar, så länge det finns en väg dit genom dina egna rutor. Den tar ') + D(hop) + TR(' per ruta på vägen. Är rutan inte din när trupperna kommer fram går de hem till byn.'),
+      TR('Du kan <b>anfalla</b> en ruta som gränsar till en ruta du kontrollerar, från valfri ruta där du har trupper. Trupperna går aldrig fågelvägen utan alltid genom dina egna rutor: ') + D(hop) + TR(' per ruta på vägen och ') + D(atk) + TR(' för sista steget in i striden. Efter striden går de överlevande till närmaste ruta du kontrollerar, om du inte kryssar i att de ska stanna och försvara rutan.'),
+      TR('<b>Förstärkning</b> kan skickas till vilken ruta du kontrollerar, så länge det finns en väg dit genom dina egna rutor. Den tar ') + D(hop) + TR(' per ruta på vägen. Är rutan inte din när trupperna kommer fram går de till närmaste ruta du kontrollerar.'),
       TR('På <b>neutrala rutor</b> står neutrala soldater, högst ') + c.neutralCap + TR('. Nya dyker upp med ') + Math.round(c.spawnBaseChance * 100) + TR(' % chans var ') + D(pc * MIN) + TR(', och chansen ökar med ') + n1(c.spawnChancePerMinute * 100) + TR(' procentenheter varje gång. Varje neutral soldat du dödar ger <b>') + c.killReward + TR(' guld</b>.'),
       TR('När du har dödat alla på en ruta utan utpost är du den som tog den senast, men den är inte din förrän du bygger en <b>utpost</b> för ') + o.cost + TR(' guld. Du behöver inte ha trupper kvar där. Utposten ger ') + gold(o.goldPerLevel) + TR(' och +') + o.defPerLevel + TR(' i grundförsvar. Ränder på kartan betyder att någon tog rutan senast men inte har byggt en utpost.'),
       TR('Utposten kan byggas ut till nivå ') + o.maxLevel + TR(' (') + o.upgradeCost + TR(' guld gånger nivån): varje nivå ger ') + gold(o.goldPerLevel) + TR(' och +') + o.defPerLevel + TR(' i grundförsvar. En <b>mur</b> i utposten ger +') + Math.round(c.wall.bonusPerLevel * 100) + TR(' % i försvar per nivå, högst nivå ') + c.wall.max + TR('. Tar en motspelare rutan förstörs utposten och muren helt, och den som tog rutan får ') + Math.round(c.razeLoot * 100) + TR(' % av vad de kostat som byte.'),
