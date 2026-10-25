@@ -997,6 +997,26 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .tal-info .sk-lock { color: var(--ink-faint); font-size: 13px; }
 .tal-info .btn { grid-column: 1 / -1; }
 
+/* Avatarer (SVG-porträtt) */
+.ava { display: block; width: 100%; height: 100%; border-radius: 21%; overflow: hidden; }
+
+/* Rutpanelen: rubriken med krysset och Skicka-knappen ligger kvar när innehållet rullar */
+.sheet > .sheet-head { position: sticky; top: -14px; z-index: 3; margin: -14px -16px 0; padding: 14px 16px 10px; background: var(--slab); border-top-left-radius: inherit; border-top-right-radius: inherit; }
+.sheet > .send-bar { position: sticky; bottom: -16px; z-index: 3; margin: 0 -16px -16px; padding: 10px 16px 16px; background: var(--slab); box-shadow: 0 -12px 14px -10px rgba(0, 0, 0, .55); }
+.sheet-head .ava-ic { padding: 0; background: none; border-radius: 22%; box-shadow: 0 0 0 2px var(--pc, var(--seam)); overflow: hidden; }
+
+/* Lobbyn: avatarval och poängmålet */
+.ava-pick { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.ava-pick button { aspect-ratio: 1; padding: 0; background: none; border: 2px solid transparent; border-radius: 24%; }
+.ava-pick button[aria-pressed="true"] { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(230, 180, 67, .3); }
+.ava-pick button:disabled { opacity: .3; cursor: default; }
+.ava-pick button .ava { border-radius: 20%; }
+.stand .ava-dot { width: 34px; height: 34px; flex: none; border-radius: 24%; box-shadow: 0 0 0 2px var(--pc, var(--seam)); overflow: hidden; }
+.vp-row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.vp-step b { min-width: 58px; display: grid; place-items: center; padding: 0 6px; font: 700 18px var(--f-num); color: var(--gold); }
+.vp-step button:disabled { opacity: .35; cursor: default; }
+.stand.with-ava { grid-template-columns: 34px minmax(0, 1fr) auto; }
+
 </style>
 </head>
 <body>
@@ -1193,7 +1213,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     <div class="mode-pane" id="paneOnline" hidden>
       <section class="stack">
         <h3 class="eyebrow">Lobby</h3>
-        <p class="hint">2–4 spelare med var sin by. Skapa en lobby och vänta på vänner, eller gå med i någon annans. Värden kan fylla på med bottar.</p>
+        <p class="hint">2–8 spelare med var sin by. Skapa en lobby och vänta på vänner, eller gå med i någon annans. Värden kan fylla på med bottar.</p>
         <button class="btn wide" data-act="online" id="onlineBtn">Skapa eller gå med i lobby</button>
         <div class="stack" id="oContinueBox" hidden>
           <button class="btn primary wide" data-act="on-resume" id="oContinueBtn">Fortsätt onlinespelet som värd</button>
@@ -1285,6 +1305,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     <div class="stack" id="onBrowse">
       <div class="field"><label for="onName">Ditt namn</label><input class="text-input" id="onName" maxlength="16" autocomplete="off" enterkeyhint="done"></div>
       <div class="field"><label for="onVillage">Din by</label><input class="text-input" id="onVillage" maxlength="24" autocomplete="off" enterkeyhint="done"></div>
+      <div class="field"><span class="label" id="onAvaLabel">Din avatar</span><div class="ava-pick" id="onAvaPick" role="group" aria-labelledby="onAvaLabel"></div></div>
       <section class="on-sec">
         <div class="ov-head"><h3 class="eyebrow">Lobbyer att gå med i</h3><span class="muted" id="onStatus"></span></div>
         <div class="list" id="onList"></div>
@@ -1299,6 +1320,11 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     <div class="stack" id="onRoom" hidden>
       <p class="lede" id="onRoomInfo"></p>
       <div class="standings" id="onPlayers"></div>
+      <div class="field"><span class="label" id="onRoomAvaLabel">Din avatar</span><div class="ava-pick" id="onRoomAva" role="group" aria-labelledby="onRoomAvaLabel"></div></div>
+      <div class="field vp-row">
+        <span class="label" id="onVpLabel">Vinstpoäng för seger</span>
+        <div class="stepper vp-step" role="group" aria-labelledby="onVpLabel"><button type="button" data-act="on-vp" data-d="-25" id="onVpMinus" aria-label="Färre vinstpoäng">−</button><b id="onVp">100</b><button type="button" data-act="on-vp" data-d="25" id="onVpPlus" aria-label="Fler vinstpoäng">+</button></div>
+      </div>
       <div class="field" id="onBotRow">
         <span class="label" id="onBotLabel">Lägg till bot</span>
         <div class="seg three" role="group" aria-labelledby="onBotLabel">
@@ -1501,7 +1527,10 @@ const Engine = (function () {
                 postCap: [2, 25], camp: { from: 8, reach: 1, minutes: 6 } },
     },
     rivalColors: [['#3b6fb6', '#74a3e8'], ['#8a4bb3', '#c08ae6']],
-    playerColors: [['#b43a2c', '#e0624f'], ['#3b6fb6', '#74a3e8'], ['#8a4bb3', '#c08ae6'], ['#2f8a6e', '#5cc7a3']],  // online
+    playerColors: [['#b43a2c', '#e0624f'], ['#3b6fb6', '#74a3e8'], ['#8a4bb3', '#c08ae6'], ['#2f8a6e', '#5cc7a3'],   // online, upp till 8 spelare
+      ['#c27a1e', '#eda24a'], ['#b03f7a', '#e278ad'], ['#21879a', '#55c2d4'], ['#a8a03a', '#d8cf62']],
+    maxOnline: 8,                 // spelare och bottar i en lobby
+    avatars: 12,                  // antal avatarer (bilderna ritas i gränssnittet); bottar får en slumpad som ingen annan har
     rivalVillageNames: ['Ödegården', 'Kråkvik', 'Granbacka', 'Svartsjö', 'Björkudden', 'Ulvhäll', 'Älvnäs', 'Stenbrott'],
     // Veckospelet: en server med plats för 10 spelare som pågår i 7 dagar, även när ingen är inne.
     //   pace     allt som tar tid går så många gånger långsammare än i timmesspelet [antagande: 20]:
@@ -2042,9 +2071,11 @@ const Engine = (function () {
     const cfg = JSON.parse(JSON.stringify(opts.config || CONFIG));
     const seed = (opts.seed != null ? opts.seed : Math.floor(Math.random() * 2147483647)) | 0;
     const rival = opts.rival === undefined ? 'normal' : opts.rival;
-    // Online: opts.humans = [{ name, villageName, bot? }, …] (högst 4). Värden är p1; bottar körs av värden.
-    const humans = opts.humans ? opts.humans.slice(0, 4) : null;
+    // Online: opts.humans = [{ name, villageName, bot?, avatar? }, …] (högst maxOnline). Värden är p1; bottar körs av värden.
+    // opts.vpToWin: poängmålet (onlinelobbyn kan ändra det), opts.avatar: spelarens avatar i singleplayer.
+    const humans = opts.humans ? opts.humans.slice(0, cfg.maxOnline || 8) : null;
     const week = !humans && opts.week ? cfg.week : null;
+    if (!week && opts.vpToWin > 0) cfg.vpToWin = Math.round(opts.vpToWin);
     if (week) {
       // Veckospelets regler: långsammare tempo, byggen tar tid, inget poängmål (mest poäng efter 7 dagar vinner).
       cfg.pace = week.pace; cfg.stepMs = week.stepMs; cfg.vpToWin = null;
@@ -2151,7 +2182,7 @@ const Engine = (function () {
         for (let k = 2; taken.has(vn.toLowerCase()); k++) vn = String(h.villageName).slice(0, 21) + ' ' + k;
         taken.add(vn.toLowerCase());
         const col = cfg.playerColors[i % cfg.playerColors.length];
-        addPlayer(s, 'p' + (i + 1), { name: String(h.name || 'Spelare ' + (i + 1)).slice(0, 16), villageName: vn, color: col[0], hi: col[1], bot: h.bot || null }, villages[i]);
+        addPlayer(s, 'p' + (i + 1), { name: String(h.name || 'Spelare ' + (i + 1)).slice(0, 16), villageName: vn, color: col[0], hi: col[1], bot: h.bot || null, avatar: h.avatar }, villages[i]);
       });
       return s;
     }
@@ -2162,11 +2193,11 @@ const Engine = (function () {
       s.tiles.forEach(t => { if (t.slot >= 0 && !t.base) { t.u = U(); syncTile(t); } });
       const fill = week.fill.filter(j => j < K);
       activateSlot(s, fill[0]);
-      addPlayer(s, 'p1', { name: opts.playerName || 'Du', villageName: opts.villageName, color: week.colors[0][0], hi: week.colors[0][1] }, 1 + fill[0]);
+      addPlayer(s, 'p1', { name: opts.playerName || 'Du', villageName: opts.villageName, color: week.colors[0][0], hi: week.colors[0][1], avatar: opts.avatar }, 1 + fill[0]);
       for (let r = 1; r < nPlayers; r++) addWeekBot(s, opts.rival || 'normal');
       return s;
     }
-    addPlayer(s, 'p1', { name: opts.playerName || 'Du', villageName: opts.villageName, color: '#b43a2c', hi: '#e0624f' }, villages[0]);
+    addPlayer(s, 'p1', { name: opts.playerName || 'Du', villageName: opts.villageName, color: '#b43a2c', hi: '#e0624f', avatar: opts.avatar }, villages[0]);
     const names = cfg.rivalVillageNames.slice();
     for (let r = 0; r < nRivals; r++) {
       const name = names.splice(Math.floor(rand(s) * names.length), 1)[0];
@@ -2250,6 +2281,7 @@ const Engine = (function () {
     s.players[id] = {
       id, name: info.name || 'Spelare', villageName: name,
       color: info.color, hi: info.hi, bot: info.bot || null, nextThink: 0,
+      avatar: info.avatar >= 0 && info.avatar < (cfg.avatars || 12) ? info.avatar | 0 : pickAvatar(s, id),
       village: villageIdx, towns: [villageIdx],
       exp: 0, level: 0, levelExp: 0, points: 0,
       skills: Object.fromEntries(Object.keys(cfg.skills).map(k => [k, 0])),
@@ -2261,6 +2293,14 @@ const Engine = (function () {
     // Bottarnas spelstil: aggressiva bottar anfaller kullens ägare på andra rutor när kullen är för stark.
     if (info.bot) s.players[id].style = rand(s) < ((cfg.rivals[info.bot] || cfg.rivals.normal).aggro || 0) ? 'aggressive' : 'steady';
     s.order.push(id);
+  }
+
+  // Avatar till en bot (eller en spelare utan val): en som ingen annan har, slumpad ur seed utan att röra rand(s).
+  function pickAvatar(s, id) {
+    const n = s.cfg.avatars || 12, used = new Set(s.order.map(x => s.players[x].avatar));
+    let a = ((((s.seed >>> 0) % 9973) * 7) + parseInt(String(id).slice(1), 10) * 5) % n;
+    for (let k = 0; k < n && used.has(a); k++) a = (a + 1) % n;
+    return a;
   }
 
   // ---- Härledda värden ----
@@ -3638,7 +3678,7 @@ const Engine = (function () {
     const pl = s.order.map(id => {
       const p = s.players[id];
       if (id === pid) return Object.assign({}, p);
-      return { id, name: p.name, villageName: p.villageName, color: p.color, hi: p.hi, bot: p.bot, village: p.village, towns: p.towns,
+      return { id, name: p.name, villageName: p.villageName, color: p.color, hi: p.hi, bot: p.bot, avatar: p.avatar, village: p.village, towns: p.towns,
         vpMs: p.vpMs, level: p.level, skills: p.skills, immuneUntil: p.immuneUntil || 0 };
     });
     const ar = [];
@@ -3796,7 +3836,6 @@ window.GP_EN = {
 "/min": "/min",
 "Din garnison": "Your garrison",
 "Försvarare": "Defenders",
-"Ny soldat varje minut": "New soldier each minute",
 "Förstärk": "Reinforce",
 " är startbyn för ": " is the starting village of ",
 "Mål: <b>": "Target: <b>",
@@ -3908,7 +3947,6 @@ window.GP_EN = {
 "\">Gå med</button>": "\">Join</button>",
 " · pågår": " · in progress",
 "Skriv ditt namn först.": "Enter your name first.",
-"Lobbyn syns nu för andra under Spela online. Starta när alla är med, 2–4 spelare.": "The lobby is now visible to others under Play online. Start when everyone has joined, 2–4 players.",
 "Du är med. Värden startar spelet när alla är med.": "You have joined. The host starts the game when everyone is in.",
 " (du)": " (you)",
 "Värd": "Host",
@@ -3965,7 +4003,6 @@ window.GP_EN = {
 "Ej byggd": "Not built",
 " · alla klara om ": " · all done in ",
 " · klar om ": " · done in ",
-" %</b> chans": " %</b> chance",
 " om ~": " in ~",
 "mot ": "against ",
 " mot ": " against ",
@@ -4083,7 +4120,6 @@ window.GP_EN = {
 " är på väg hit, framme om ": " are on the way here, arriving in ",
 "neutrala": "neutral",
 "syns bara från en granne": "only visible from a neighbour",
-"Ingen, rutan är full": "None, the territory is full",
 "Utposten har högsta nivå": "Outpost at max level",
 "Utpost nivå ": "Outpost level ",
 "Muren har högsta nivå": "Wall at max level",
@@ -4145,7 +4181,6 @@ window.GP_EN = {
 " % i försvar per nivå, högst nivå ": " % defence per level, up to level ",
 "Anfallspoäng och försvarspoäng räknas ihop för alla trupper. Den överlägsna sidan får sin överlägsenhet dubblad. Varje sida förlorar sedan andelen <b>motståndarens poäng delat med de egna</b> av sina trupper, avrundat nedåt. Exempel: 10 mot 5 blir 15 mot 5, så anfallaren förlorar en tredjedel (3) och försvararen alla. Den svagare sidan förlorar alltid alla, och vid lika poäng dör alla på båda sidor.": "Attack points and defence points are added up for all troops. The stronger side gets its advantage doubled. Each side then loses the share <b>opponent's points divided by its own</b> of its troops, rounded down. Example: 10 against 5 becomes 15 against 5, so the attacker loses a third (3) and the defender everyone. The weaker side always loses everyone, and with equal points everyone on both sides dies.",
 " % per nivå, eller både anfall och försvar för en trupptyp i taget (soldat, berserker, sköldgrabb). Varje sak kan förbättras upp till verkstadens nivå, kön rymmer ": " % per level, or both attack and defence for one troop type at a time (soldier, berserker, shieldbearer). Each can be improved up to the workshop's level, the queue holds ",
-"<b>Online</b>: 2–4 spelare, ungefär ": "<b>Online</b>: 2–4 players, about ",
 "Rutan är redan din.": "The territory is already yours.",
 "Du har inga trupper där.": "You have no troops there.",
 "Det är inte din utpost.": "That is not your outpost.",
@@ -4263,7 +4298,6 @@ window.GP_EN = {
 "Poäng per timme": "Points per hour",
 "guldgruva på en ruta": "gold mine on a territory",
 "guldgruvor på rutor": "gold mines on territories",
-"Ny soldat var ": "New soldier every ",
 " sekunder": " seconds",
 " guld i timmen": " gold per hour",
 " guld per minut": " gold per minute",
@@ -4435,8 +4469,6 @@ window.GP_EN = {
 "Byns namn": "Village name",
 "Bottarnas nivå": "Bot level",
 "Spelet börjar i 1×. Du kan ändra hastigheten under spelet. Bottarna körs i din webbläsare.": "The game starts at 1×. You can change the speed during the game. The bots run in your browser.",
-" startar spelet.": " to start the game.",
-" rutor per spelare. En spelare skapar en lobby och kan fylla på med bottar; de andra går med under Spela online. Spelet börjar i 1×. Värden kör spelet och kan ändra hastigheten under spelets gång, så det går bara medan värden har det öppet. Tappar du anslutningen kan du återansluta, och värden kan fortsätta ett sparat onlinespel senare.": " territories per player. One player creates a lobby and can fill up with bots; the others join under Play online. The game starts at 1×. The host runs the game and can change the speed during play, so it only runs while the host has it open. If you lose the connection you can reconnect, and the host can continue a saved online game later.",
 "minuter": "minutes",
 "timmar": "hours",
 "dag": "day",
@@ -4501,7 +4533,25 @@ window.GP_EN = {
 ". Anfall: <b>Blodtörst</b> (+6 % anfall per nivå), <b>Dödsångest</b> (+20 % lik per nivå), <b>Snabbfotad</b> (anfall 25 % snabbare per nivå) och <b>Stridsduglig</b> (dina anfall ignorerar utposternas grundförsvar och halva murbonusen). Försvar: <b>Hårdhudad</b> (+6 % försvar per nivå), <b>Järnspikar</b> (+1 grundförsvar per nivå på alla dina rutor), <b>En för alla, alla för en</b> (förflyttningar 25 % snabbare per nivå) och <b>Mur av döda</b> (draugar +0,5 i försvar). Ekonomi: <b>Guldpost</b> (utposterna +15 % guld per nivå), <b>Gruvdrift</b> (byns guldgruva +5 % per nivå), <b>Som ny!</b> (2 guld per nivå för varje fientlig trupp du dödar) och <b>Byggmästare</b> (utposter och murar ": ". Attack: <b>Bloodlust</b> (+6% attack per level), <b>Death Dread</b> (+20% corpses per level), <b>Swiftfoot</b> (attacks 25% faster per level) and <b>Battle-hardened</b> (your attacks ignore outposts' base defence and half the wall bonus). Defence: <b>Thick Skin</b> (+6% defence per level), <b>Iron Spikes</b> (+1 base defence per level on all your territories), <b>All for One, One for All</b> (moves 25% faster per level) and <b>Wall of the Dead</b> (draugar +0.5 defence). Economy: <b>Gold Post</b> (outposts +15% gold per level), <b>Mining</b> (village gold mine +5% per level), <b>Good as New!</b> (2 gold per level for every enemy troop you kill) and <b>Master Builder</b> (outposts and walls ",
 " % billigare).": "% cheaper).",
 "Det finns ingen guldgruva här.": "There is no gold mine here.",
-"Rutan är inte din.": "The territory is not yours."
+"Rutan är inte din.": "The territory is not yours.",
+"Bandit": "Bandit",
+"Lobbyn syns nu för andra under Spela online. Starta när alla är med, 2–8 spelare.": "The lobby is now visible to others under Play online. Start when everyone has joined, 2–8 players.",
+" startar spelet. Först till ": " to start the game. First to ",
+" vinstpoäng vinner.": " victory points wins.",
+"<b>Online</b>: 2–8 spelare, ungefär ": "<b>Online</b>: 2–8 players, about ",
+" rutor per spelare. En spelare skapar en lobby, väljer hur många vinstpoäng som krävs och kan fylla på med bottar; de andra går med under Spela online. Alla väljer en avatar. Spelet börjar i 1×. Värden kör spelet och kan ändra hastigheten under spelets gång, så det går bara medan värden har det öppet. Tappar du anslutningen kan du återansluta, och värden kan fortsätta ett sparat onlinespel senare.": " territories per player. One player creates a lobby, chooses how many victory points are needed and can fill up with bots; the others join under Play online. Everyone picks an avatar. The game starts at 1×. The host runs the game and can change the speed during play, so it only runs while the host has it open. If you lose the connection you can reconnect, and the host can continue a saved online game later.",
+"Jarlen": "The Jarl",
+"Sköldmön": "The Shieldmaiden",
+"Druiden": "The Druid",
+"Drottningen": "The Queen",
+"Kungen": "The King",
+"Bärsärken": "The Berserker",
+"Jägaren": "The Hunter",
+"Smeden": "The Smith",
+"Siaren": "The Seer",
+"Kämpen": "The Champion",
+"Köpmannen": "The Merchant",
+"Krigaren": "The Warrior"
 };
 window.GP_EN_BODY = {
 "Inställningar": "Settings",
@@ -4580,7 +4630,6 @@ window.GP_EN_BODY = {
 "Spelkarta": "Game map",
 "Bygg upp byn, träna soldater och ta rutorna runt omkring dig. Bygg utposter, försvara gränserna och ta rivalernas rutor. Varje ruta du har ger en vinstpoäng var tionde minut. Först till 100 vinner.": "Build up your village, train soldiers and take the territories around you. Build outposts, defend your borders and take your rivals' territories. Every territory you hold gives a victory point every ten minutes. First to 100 wins.",
 "Två bottar tävlar om rutorna, försvarar sina gränser och anfaller både dig och varandra.": "Two bots compete for the territories, defend their borders and attack both you and each other.",
-"2–4 spelare med var sin by. Skapa en lobby och vänta på vänner, eller gå med i någon annans. Värden kan fylla på med bottar.": "2–4 players, each with a village. Create a lobby and wait for friends, or join someone else's. The host can fill up with bots.",
 "Lobby": "Lobby",
 "Skapa eller gå med i lobby": "Create or join a lobby",
 "Spela ensam": "Play solo",
@@ -4588,7 +4637,12 @@ window.GP_EN_BODY = {
 "Spelläge": "Game mode",
 "Anfall": "Attack",
 "Försvar": "Defence",
-"Visa rapporter": "Show reports"
+"Visa rapporter": "Show reports",
+"2–8 spelare med var sin by. Skapa en lobby och vänta på vänner, eller gå med i någon annans. Värden kan fylla på med bottar.": "2–8 players, each with a village. Create a lobby and wait for friends, or join someone else's. The host can fill up with bots.",
+"Din avatar": "Your avatar",
+"Fler vinstpoäng": "More victory points",
+"Färre vinstpoäng": "Fewer victory points",
+"Vinstpoäng för seger": "Victory points to win"
 };
 window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires research centre level $1."], ["^Kräver verkstad nivå (\\d+)\\.$", "Requires workshop level $1."], ["^Kräver (\\d+) poäng i samma träd först\\.$", "Requires $1 points in the same tree first."], ["^Kräver ekonomicentrum nivå (\\d+)\\.$", "Requires economic centre level $1."]];
 </script>
@@ -4637,6 +4691,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   const WSAVE_KEY = 'guld-och-potatis:week:v1';     // veckospelet (körs lokalt tills vidare)
   const REJOIN_KEY = 'guld-och-potatis:rejoin:v1';  // gästens senaste lobby (för att återansluta)
   const NAME_KEY = 'guld-och-potatis:name:v1';
+  const AVATAR_KEY = 'guld-och-potatis:avatar:v1';   // vald avatar (0–11), används online och i singleplayer
   const MODE_KEY = 'guld-och-potatis:mode:v1';     // startskärmens flik: 'solo' (Spela ensam) eller 'online'
   // Onlineläge. role: null (singleplayer), 'host' eller 'guest'. view: 'browse', 'room' eller 'game'.
   const NET = { role: null, view: null, lobby: null, hostH: null, link: null, room: null, init: null, list: [], unwatch: null,
@@ -4779,6 +4834,81 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     return S.towns[ui.town];
   }
   const isDesk = () => window.matchMedia('(min-width: 960px)').matches;
+
+
+  // ---------- Avatarer: porträtt ritade som SVG (skickas inte, bara numret 0–11 ligger på spelaren) ----------
+  // Varje avatar: hud, hår/huvudbonad [stil, färg], skägg [stil, färg], kläder [stil, färg], extra, bakgrund.
+  const AVAS = [
+    { n: 'Jarlen', skin: '#e6b892', hair: ['helmet', '#8f959a'], beard: ['long', '#b5612e'], cloth: ['fur', '#8e2f25'], bg: '#3d5a6e' },
+    { n: 'Sköldmön', skin: '#f0c9a6', hair: ['braids', '#e2c06b'], beard: null, cloth: ['leather', '#7a5235'], extra: 'paint', bg: '#55436e' },
+    { n: 'Druiden', skin: '#e2b48d', hair: ['hood', '#4f6b3a'], beard: ['long', '#e8e4dc'], cloth: ['robe', '#4f6b3a'], bg: '#2f4a3c' },
+    { n: 'Drottningen', skin: '#efc6a3', hair: ['crownlong', '#3a2418'], beard: null, cloth: ['robe', '#6b3f8a'], extra: 'earring', bg: '#6e3d4c' },
+    { n: 'Kungen', skin: '#dfae86', hair: ['crown', '#6b4428'], beard: ['short', '#6b4428'], cloth: ['fur', '#a2342a'], bg: '#3e3a6b' },
+    { n: 'Bärsärken', skin: '#d9a47c', hair: ['bald', null], beard: ['braided', '#2a211c'], cloth: ['fur', '#5b4a3a'], extra: 'redpaint', bg: '#6e3a2f' },
+    { n: 'Jägaren', skin: '#c98e65', hair: ['cap', '#3f5b35'], beard: ['mustache', '#4a3324'], cloth: ['leather', '#5d6b3a'], bg: '#4b5a34' },
+    { n: 'Smeden', skin: '#c58a62', hair: ['short', '#2b2420'], beard: ['short', '#2b2420'], cloth: ['leather', '#6b4a2f'], extra: 'patch', bg: '#5e4a3a' },
+    { n: 'Siaren', skin: '#efcdb0', hair: ['bun', '#cfd2d6'], beard: null, cloth: ['robe', '#2f3448'], extra: 'dots', bg: '#2d3a55' },
+    { n: 'Kämpen', skin: '#e9bf9a', hair: ['short', '#a5412c'], beard: null, cloth: ['armor', '#8f959a'], extra: 'scar', bg: '#4d5b66' },
+    { n: 'Köpmannen', skin: '#8d5a3c', hair: ['furcap', '#4a3020'], beard: ['mustache', '#1d1714'], cloth: ['robe', '#2f5d8a'], extra: 'earring', bg: '#6b5a2f' },
+    { n: 'Krigaren', skin: '#a8714f', hair: ['long', '#1d1714'], beard: null, cloth: ['armor', '#9a8f7a'], bg: '#3a5f5a' },
+  ];
+  const BANDIT = { n: 'Bandit', skin: '#d6a37d', hair: ['hood', '#4f4236'], beard: null, cloth: ['leather', '#3a2f28'], extra: 'mask', bg: '#2a2622' };
+  const avaShade = (hex, k) => { const n = parseInt(hex.slice(1), 16), f = c => Math.max(0, Math.min(255, Math.round(c * k))); return 'rgb(' + f(n >> 16) + ',' + f((n >> 8) & 255) + ',' + f(n & 255) + ')'; };
+  const avaCache = new Map();
+  function avatarSVG(i) {
+    const key = i === 'bandit' ? 'b' : String(i);
+    if (avaCache.has(key)) return avaCache.get(key);
+    const a = i === 'bandit' ? BANDIT : AVAS[((i | 0) % AVAS.length + AVAS.length) % AVAS.length];
+    const sk = a.skin, skD = avaShade(sk, 0.8), [hs, hc] = a.hair || [], [bs, bc] = a.beard || [], [cs, cc] = a.cloth;
+    let o = '<rect width="48" height="48" rx="10" fill="' + a.bg + '"/><circle cx="24" cy="18" r="17" fill="#fff" opacity=".07"/>';
+    // Hår och huva bakom huvudet
+    if (hs === 'long' || hs === 'braids' || hs === 'crownlong') o += '<path d="M14 21c-1.5 9 0 17 3 21h14c3-4 4.5-12 3-21z" fill="' + hc + '"/>';
+    if (hs === 'hood') o += '<path d="M10.5 40c-1.5-13 2-29 13.5-29s15 16 13.5 29z" fill="' + hc + '"/><path d="M14 36c-.6-9 2.5-19 10-19s10.6 10 10 19z" fill="' + avaShade(hc, 0.55) + '"/>';
+    // Kläder, hals och huvud
+    o += '<path d="M5 48C5 39.5 13 34.5 24 34.5S43 39.5 43 48z" fill="' + cc + '"/>';
+    if (cs === 'fur') o += '<path d="M11 39c4-3.4 8.5-4.6 13-4.6s9 1.2 13 4.6c-3.5 1.8-8 2.6-13 2.6s-9.5-.8-13-2.6z" fill="#d8c8a8"/><path d="M14 39.5l2 1.5M19 40.6l1.5 1.4M24 41l.5 1.6M29 40.6l-1.2 1.4M34 39.5l-2 1.5" stroke="#a8977a" stroke-width="1"/>';
+    if (cs === 'armor') o += '<path d="M5 48C5 39.5 13 34.5 24 34.5S43 39.5 43 48z" fill="none" stroke="' + avaShade(cc, 0.6) + '" stroke-width="1.2"/><path d="M13 41.5c3.5-2 7-2.8 11-2.8s7.5.8 11 2.8" stroke="' + avaShade(cc, 0.6) + '" stroke-width="1.2" fill="none"/><circle cx="16" cy="44" r=".9" fill="#ddd"/><circle cx="32" cy="44" r=".9" fill="#ddd"/>';
+    if (cs === 'robe') o += '<path d="M19.5 34.8l4.5 7.5 4.5-7.5" fill="none" stroke="#e6b443" stroke-width="1.4"/>';
+    if (cs === 'leather') o += '<path d="M17 35.5l3 12.5M31 35.5l-3 12.5" stroke="' + avaShade(cc, 0.65) + '" stroke-width="1.6"/>';
+    o += '<path d="M20.3 27h7.4v8.6c-1.2.9-2.4 1.3-3.7 1.3s-2.5-.4-3.7-1.3z" fill="' + skD + '"/>';
+    o += '<circle cx="15.6" cy="22" r="2.1" fill="' + skD + '"/><circle cx="32.4" cy="22" r="2.1" fill="' + skD + '"/>';
+    o += '<ellipse cx="24" cy="21" rx="8.6" ry="10.2" fill="' + sk + '"/>';
+    // Ansiktsmålning
+    if (a.extra === 'paint') o += '<path d="M15.6 19.6h16.8v3.4H15.6z" fill="#3c6fb3" opacity=".75"/>';
+    if (a.extra === 'redpaint') o += '<path d="M19 15l-1.6 12M29 15l1.6 12" stroke="#a8321f" stroke-width="2" opacity=".8"/>';
+    if (a.extra === 'dots') o += '<circle cx="24" cy="14.5" r=".9" fill="#3c6fb3"/><circle cx="21.6" cy="15.2" r=".7" fill="#3c6fb3"/><circle cx="26.4" cy="15.2" r=".7" fill="#3c6fb3"/>';
+    // Ögon, bryn, näsa, mun
+    const angry = a === BANDIT || a.extra === 'redpaint';
+    o += '<ellipse cx="20.4" cy="21.4" rx="1.2" ry="1.35" fill="#24180f"/><ellipse cx="27.6" cy="21.4" rx="1.2" ry="1.35" fill="#24180f"/>';
+    o += '<path d="' + (angry ? 'M18.3 18l3.8 1.2M29.7 18l-3.8 1.2' : 'M18.4 18.6l3.6-.5M26 18.1l3.6.5') + '" stroke="' + (hc && hs !== 'helmet' && hs !== 'hood' && hs !== 'cap' && hs !== 'furcap' ? avaShade(hc, 0.8) : '#4a3324') + '" stroke-width="1.3" stroke-linecap="round"/>';
+    o += '<path d="M24 22.3l-1.4 3.8h2.4" fill="none" stroke="' + avaShade(sk, 0.65) + '" stroke-width="1" stroke-linejoin="round"/>';
+    o += '<path d="M21.6 28.1q2.4 1.3 4.8 0" fill="none" stroke="#8a4234" stroke-width="1.1" stroke-linecap="round"/>';
+    if (a.extra === 'scar') o += '<path d="M28.5 16.5l2.2 8" stroke="#b0574a" stroke-width="1.1"/><path d="M28.6 19l1.4-.4M29.2 21.3l1.4-.4" stroke="#b0574a" stroke-width=".8"/>';
+    if (a.extra === 'patch') o += '<path d="M15.5 17.5l17 6" stroke="#1b1512" stroke-width="1"/><ellipse cx="27.6" cy="21.4" rx="2.6" ry="2.3" fill="#1b1512"/>';
+    if (a.extra === 'earring') o += '<circle cx="15.8" cy="25" r="1.1" fill="none" stroke="#e6b443" stroke-width=".9"/><circle cx="32.2" cy="25" r="1.1" fill="none" stroke="#e6b443" stroke-width=".9"/>';
+    if (a.extra === 'mask') o += '<path d="M15.3 23.3c2.4 1.1 5.4 1.7 8.7 1.7s6.3-.6 8.7-1.7c-.3 5.9-3.9 9.4-8.7 9.4s-8.4-3.5-8.7-9.4z" fill="#5b2b25"/><path d="M17 26.5h14M18.5 29.5h11" stroke="#47201b" stroke-width=".8"/><path d="M32.5 24.5l3 2-2.6 1.8" fill="#5b2b25"/>';
+    // Skägg
+    const must = c => '<path d="M19.7 27.2c1.6-1.6 3-1.5 4.3-.6 1.3-.9 2.7-1 4.3.6-1.6-.4-2.9 0-4.3.9-1.4-.9-2.7-1.3-4.3-.9z" fill="' + c + '"/>';
+    if (bs === 'long' || bs === 'braided') o += '<path d="M15.6 22.5c0 10 3.6 16.5 8.4 16.5s8.4-6.5 8.4-16.5c-1.4 3.2-4.2 4.8-8.4 4.8s-7-1.6-8.4-4.8z" fill="' + bc + '"/>' + must(avaShade(bc, 0.85));
+    if (bs === 'braided') o += '<path d="M22.5 37.5h3l-.4 3h-2.2zM22.8 40.8h2.4l-.3 3h-1.8z" fill="' + avaShade(bc, 0.8) + '"/><circle cx="24" cy="44.5" r="1" fill="#e6b443"/>';
+    if (bs === 'short') o += '<path d="M15.8 23.5c.4 5.6 3.6 9.3 8.2 9.3s7.8-3.7 8.2-9.3c-1.6 2.3-4.4 3.4-8.2 3.4s-6.6-1.1-8.2-3.4z" fill="' + bc + '"/>' + must(avaShade(bc, 0.85));
+    if (bs === 'mustache') o += must(bc);
+    // Hår och huvudbonader ovanpå
+    const top = c => '<path d="M15.2 21c-.8-7 3.4-11.4 8.8-11.4s9.6 4.4 8.8 11.4c-1.4-4-4-6.2-8.8-6.2s-7.4 2.2-8.8 6.2z" fill="' + c + '"/>';
+    if (hs === 'short' || hs === 'long' || hs === 'braids' || hs === 'crown' || hs === 'crownlong' || hs === 'bun') o += top(hc);
+    if (hs === 'braids') o += [15.2, 32.8].map(x => '<path d="M' + (x - 1.6) + ' 27h3.2l-.4 3.2h-2.4zM' + (x - 1.4) + ' 30.5h2.8l-.4 3.2h-2zM' + (x - 1.2) + ' 34h2.4l-.4 3.2h-1.6z" fill="' + avaShade(hc, 0.85) + '"/>').join('');
+    if (hs === 'bun') o += '<circle cx="24" cy="9.2" r="4" fill="' + hc + '"/><path d="M21 9.5h6" stroke="' + avaShade(hc, 0.75) + '" stroke-width="1"/>';
+    if (hs === 'crown' || hs === 'crownlong') o += '<path d="M16.8 14.2l1.6-6 3.4 3.8 2.2-5 2.2 5 3.4-3.8 1.6 6z" fill="#e6b443" stroke="#a77b1f" stroke-width=".8"/><circle cx="24" cy="12.6" r="1.1" fill="#b43a2c"/>';
+    if (hs === 'helmet') o += '<path d="M14.6 20c0-7.4 4.1-11.8 9.4-11.8s9.4 4.4 9.4 11.8z" fill="' + hc + '"/><path d="M14.4 17.6h19.2v2.8H14.4zM23 8.4h2v16h-2z" fill="' + avaShade(hc, 0.7) + '"/><circle cx="16.8" cy="19" r=".7" fill="#ddd"/><circle cx="31.2" cy="19" r=".7" fill="#ddd"/>';
+    if (hs === 'hood') o += '<path d="M14.6 21c-.2-6.8 3.8-10.6 9.4-10.6s9.6 3.8 9.4 10.6c-2-3.2-5-4.8-9.4-4.8s-7.4 1.6-9.4 4.8z" fill="' + hc + '"/>';
+    if (hs === 'cap') o += '<path d="M15 18.5c0-5.4 4-8.8 9-8.8s9 3.4 9 8.8z" fill="' + hc + '"/><path d="M14 18.2h20v2.2H14z" fill="' + avaShade(hc, 0.7) + '"/><path d="M30 11l5-3" stroke="#d8c8a8" stroke-width="1.4"/>';
+    if (hs === 'furcap') o += '<path d="M15.6 16c0-5 3.8-8 8.4-8s8.4 3 8.4 8z" fill="' + hc + '"/><rect x="14.4" y="14.6" width="19.2" height="5" rx="2.5" fill="#9a7650"/><path d="M16 17h16" stroke="#7a5a3a" stroke-width=".8" stroke-dasharray="1.2 1.4"/>';
+    const svg = '<svg class="ava" viewBox="0 0 48 48" aria-hidden="true">' + o + '</svg>';
+    avaCache.set(key, svg);
+    return svg;
+  }
+  const myAvatar = () => { const a = store.get(AVATAR_KEY); return a >= 0 && a < AVAS.length ? a | 0 : 0; };
+  const avatarName = i => i === 'bandit' ? TR('Bandit') : TR(AVAS[i % AVAS.length].n);
 
   // ---------- Ljud ----------
   // Ljudet när en trupp blir klar i barracken (mp3 i GP_SOUNDS.trained, sounds.js) och fyra händelseljud (SFX nedan).
@@ -7234,11 +7364,11 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     setText(h.el.querySelector('.val small'), c.vpToWin ? '/' + c.vpToWin : '');
     h.bar.style.background = S.online ? p.hi : '';
     const rvs = rivals();
-    if (S.week) {
-      // Veckospelet: din plats och avståndet till ledaren.
+    if (S.week || rvs.length > 3) {
+      // Veckospelet och onlinespel med många spelare: din plats (och i veckospelet avståndet till ledaren).
       const top = S.order.slice().sort((a, b) => S.players[b].vpMs - S.players[a].vpMs), lead = E.vp(S.players[top[0]]);
-      h.bar.style.width = (lead > 0 ? 100 * v / lead : 0).toFixed(1) + '%';
-      h.rmeters.innerHTML = '';
+      if (S.week) h.bar.style.width = (lead > 0 ? 100 * v / lead : 0).toFixed(1) + '%';
+      if (h.rmeters.innerHTML) h.rmeters.innerHTML = '';
       setText(h.sub, TR('plats ') + (top.indexOf(ME) + 1) + TR(' av ') + S.order.length);
       h.el.title = TR('Vinstpoäng. Tryck för topplistan.');
     } else if (rvs.length) {
@@ -7367,7 +7497,12 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     const imm = (o && E.immune(S, o.id)) ? o : null;
     const prot = imm ? '<span class="tag shield">' + icon('k-defense') + TR('Immun ') + durWords(imm.immuneUntil - S.time) + '</span>' : '';
     const sub = t.type === 'village' ? TR('Startby') : t.adj.length + (t.adj.length === 1 ? TR(' granne') : TR(' grannar'));
-    return '<div class="sheet-head"><div class="bld-ic">' + icon(TYPES[t.type].icon) + '</div>' +
+    // Bilden uppe till vänster: ägarens (eller ockupantens) avatar, en bandit på neutrala rutor.
+    const who = (t.owner || t.occ) && S.players[t.owner || t.occ];
+    const pic = who ? '<div class="bld-ic ava-ic" style="--pc:' + who.color + '" title="' + esc(pname(who)) + '">' + avatarSVG(who.avatar || 0) + '</div>'
+      : t.type !== 'village' ? '<div class="bld-ic ava-ic" title="' + TR('Bandit') + '">' + avatarSVG('bandit') + '</div>'
+      : '<div class="bld-ic">' + icon(TYPES[t.type].icon) + '</div>';
+    return '<div class="sheet-head">' + pic +
       '<div><h3>' + esc(rname(t)) + tag + prot + '</h3><span class="coord">' + sub + '</span></div>' +
       '<button class="icon-btn" type="button" data-act="close-sheet" aria-label="' + TR('Stäng') + '">' + icon('i-close') + '</button></div>';
   }
@@ -7389,8 +7524,9 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       '</div>' +
       (attack ? '<label class="check" id="stayRow"><input type="checkbox" id="stayChk"><span>' + TR('Stanna och försvara rutan efter anfallet') + '</span></label>' : '') +
       '<p class="forecast" id="sh-fc"></p>' +
-      '<button class="btn primary wide" type="button" data-act="send" id="sendBtn">' + TR('Skicka') + '</button>' +
-      '</div>';
+      '</div>' +
+      // Skicka-knappen ligger kvar längst ned i panelen när man rullar (mobil).
+      '<div class="send-bar"><button class="btn primary wide" type="button" data-act="send" id="sendBtn">' + TR('Skicka') + '</button></div>';
   }
   const storeTxt = g => '<b>' + fmt(g) + TR('</b> guld');
   // Utpostens nivå, guld och försvar (och muren).
@@ -7463,14 +7599,13 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
           '<div class="up-wrap wide"><button class="btn primary wide" type="button" data-act="build" id="buildBtn"><span>' + TR('Bygg utpost') + '</span><span class="cost">' + goldIcon + '<span>' + c.outpost.cost + '</span></span></button></div>';
         if (sourcesFor(ui.sel).length) html += sendHTML(TR('Förstärk'), false);
       } else if (mode === 'target') {
-        html += '<dl class="facts"><div><dt>' + TR('Försvarare') + '</dt><dd id="sh-def"></dd></div>' + (t.type === 'village' || t.hill ? '' : '<div><dt>' + TR('Utpost') + '</dt><dd id="sh-post"></dd></div>') +
-          (t.owner || t.occ ? '' : '<div><dt>' + (S.week ? TR('Ny soldat var ') + durWords(MIN * paceS()) : TR('Ny soldat varje minut')) + '</dt><dd id="sh-chance"></dd></div>') +
+        html += '<dl class="facts"><div><dt>' + TR('Försvarare') + '</dt><dd id="sh-def"></dd></div>' + (t.type === 'village' || t.hill || !t.owner ? '' : '<div><dt>' + TR('Utpost') + '</dt><dd id="sh-post"></dd></div>') +
           (t.type === 'village' ? '<div><dt>' + TR('Grundförsvar') + '</dt><dd>' + villageDefTxt(ui.sel) + '</dd></div>' : '') +
           (t.hill ? '<div><dt>' + TR('Vinstpoäng') + '</dt><dd>' + vpTxt(t) + '</dd></div>' : '') + '</dl>' +
           sendHTML(TR('Anfall'), true);
       } else if (mode === 'far') {
         html += '<p class="lede">' + esc(TE(E.attackBlock(S, ME, ui.sel) || '')) + (seeT(ui.sel) ? '' : ' ' + TR('Hur många som står här ser du först när du har en ruta bredvid.')) + '</p>' +
-          '<dl class="facts"><div><dt>' + TR('Försvarare') + '</dt><dd id="sh-def"></dd></div>' + (t.hill ? '' : '<div><dt>' + TR('Utpost') + '</dt><dd id="sh-post"></dd></div>') +
+          '<dl class="facts"><div><dt>' + TR('Försvarare') + '</dt><dd id="sh-def"></dd></div>' + (t.hill || !t.owner ? '' : '<div><dt>' + TR('Utpost') + '</dt><dd id="sh-post"></dd></div>') +
           '<div><dt>' + TR('Avstånd') + '</dt><dd>' + nearestTxt(ui.sel) + '</dd></div></dl>';
       } else if (!t.owner) {
         html += '<p class="lede">' + TR('Ledig byplats. Här börjar nästa spelare som går med. Den går inte att anfalla eller ta, och trupper kan inte gå igenom den.') + '</p>';
@@ -7480,7 +7615,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
           '<dl class="facts"><div><dt>' + TR('Försvarare') + '</dt><dd id="sh-def"></dd></div><div><dt>' + TR('Grundförsvar') + '</dt><dd>' + villageDefTxt(ui.sel) + '</dd></div>' +
           '<div><dt>' + TR('Vinstpoäng') + '</dt><dd>' + fmt(E.vp(o)) + ' · ' + E.countControlled(S, o.id) + TR(' rutor') + '</dd></div></dl>';
       }
-      html += '<p class="incoming" id="sh-inc" hidden></p>';
+      const inc = '<p class="incoming" id="sh-inc" hidden></p>', kb = html.indexOf('<div class="send-bar">');
+      html = kb >= 0 ? html.slice(0, kb) + inc + html.slice(kb) : html + inc;
       el.innerHTML = html;
       el.hidden = false;
       const fs = $('fromSel');
@@ -7531,7 +7667,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         '<div class="urows" id="fwdRows"></div>' +
         '<label class="check" id="fwdStayRow" hidden><input type="checkbox" id="fwdStay"><span>' + TR('Stanna och försvara rutan efter anfallet') + '</span></label>' +
         '<p class="fwd-hint" id="fwdInfo"></p>' +
-        '<div class="row"><button class="btn" type="button" data-act="fwd-cancel">' + TR('Avbryt') + '</button><button class="btn primary" type="button" data-act="fwd-send" id="fwdSend">' + TR('Skicka') + '</button></div>';
+        '<div class="row send-bar"><button class="btn" type="button" data-act="fwd-cancel">' + TR('Avbryt') + '</button><button class="btn primary" type="button" data-act="fwd-send" id="fwdSend">' + TR('Skicka') + '</button></div>';
       el.hidden = false;
       $('fwdTo').addEventListener('change', e => { if (ui.fwd) { ui.fwd.to = +e.target.value; updateFwd(); } });
       updateFwd();
@@ -7699,7 +7835,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if ($('sh-dp')) { const d = E.tileDefense(S, ui.sel, true); $('sh-dp').innerHTML = '<b>' + nf1.format(E.defensePoints(S, ui.sel, true)) + '</b>' + (d.flat ? ' <span class="muted">(' + TR('varav ') + d.flat + TR(' grundförsvar') + ')</span>' : ''); }
     if ($('stayRow')) $('stayRow').hidden = t.type === 'village';
     if ($('sh-post')) $('sh-post').innerHTML = postTxt(t);
-    if ($('sh-chance')) $('sh-chance').innerHTML = t.troops >= c.neutralCap ? TR('Ingen, rutan är full') : '<b>' + Math.round(E.nextSpawnChance(S) * 100) + TR(' %</b> chans');
     const gph = E.goldPerHour(S, tw);
     const when = cost => tw.gold >= cost ? '' : cost > E.goldCap(S, tw) ? TR('Kräver större skattkammare') : TR('Råd om ') + dur((cost - tw.gold) / gph * E.HOUR);
     if (mode === 'mine' && !t.post) $('fwdBtn').disabled = $('recallAll').disabled = t.troops === 0;
@@ -8293,7 +8428,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     ui.weekLevel = ui.wLevel;
     $('weekBox').classList.add('busy');
     setTimeout(() => {   // kartan för tio spelare tar en kort stund att rita upp
-      const st = E.createGame({ villageName: name, week: true, bots: ui.weekBots, rival: ui.weekLevel });
+      const st = E.createGame({ villageName: name, week: true, bots: ui.weekBots, rival: ui.weekLevel, avatar: myAvatar() });
       st.weekLevel = ui.weekLevel;
       $('weekBox').classList.remove('busy');
       beginGame(st, 1, 0);
@@ -8302,7 +8437,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   }
   function newGame() {
     const name = ($('vnameInput').value || '').trim().slice(0, 24) || TR('Nybygget');
-    beginGame(E.createGame({ villageName: name, rival: ui.chosenRival === 'none' ? null : ui.chosenRival }), 1, 0);
+    beginGame(E.createGame({ villageName: name, rival: ui.chosenRival === 'none' ? null : ui.chosenRival, avatar: myAvatar() }), 1, 0);
     setTab('village');
   }
   // Startskärmens flikar: Spela ensam (timmesspelet) och Spela online (lobby och veckoservern).
@@ -8550,6 +8685,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       case 'on-rmbot': removeBot(+b.dataset.i); break;
       case 'on-leave': leaveOnline(); openOnline(); break;
       case 'on-resume': hostResume(); break;
+      case 'on-vp': setLobbyVp(+b.dataset.d); break;
+      case 'ava': pickAva(+b.dataset.ava); break;
       case 'on-rejoin': rejoin(); break;
       case 'on-quit': leaveOnline(); showStart(); break;
       case 'close-win': $('ov-win').hidden = true; setTab('map'); break;
@@ -8687,7 +8824,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   });
 
   // =====================================================================
-  //   ONLINE — lobby, anslutning och synk för 2–4 spelare.
+  //   ONLINE — lobby, anslutning och synk för 2–8 spelare (människor och bottar).
   //   Värden (p1) kör motorn precis som i singleplayer. Gästerna skickar
   //   handlingar och får tillbaka en vy med dimma (Engine.encodeView).
   //   Supabase Realtime används bara för lobbylistan (presence) och för att
@@ -8699,7 +8836,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     supabaseKey: 'sb_publishable_eyoxyRNFN4f1KOsOhJjdBQ_LGNIQ3DZ',   // publik nyckel, får synas
     ice: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
   };
-  const PROTO = 12, MAXP = 4, CHUNK = 15000;
+  const PROTO = 13, MAXP = E.CONFIG.maxOnline || 8, CHUNK = 15000;
   const useLocal = () => !ONLINE_CFG.supabaseUrl || !ONLINE_CFG.supabaseKey || /[?&]lokal\b/.test(location.search);
   function rid(n) {
     const a = 'abcdefghjkmnpqrstuvwxyz23456789', r = crypto.getRandomValues(new Uint8Array(n));
@@ -8715,7 +8852,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     set(v) { try { rj.st().setItem(REJOIN_KEY, JSON.stringify(v)); } catch (e) { /* ingen lagring */ } },
     del() { try { rj.st().removeItem(REJOIN_KEY); } catch (e) { /* ingen lagring */ } },
   };
-  if (/[?&]debug\b/.test(location.search)) window.GP_DEBUG = () => ({ S, NET, ME, E, cam, ui, sfx, SFX, SFX_VOL, playSfx, sfxCheck, sfxSeen, drawLand, waterBase, shapesFor, decorFor, pickTile: i => { ui.fwd = null; selectTile(i); } });
+  if (/[?&]debug\b/.test(location.search)) window.GP_DEBUG = () => ({ S, NET, ME, E, cam, ui, sfx, SFX, avatarSVG, SFX_VOL, playSfx, sfxCheck, sfxSeen, drawLand, waterBase, shapesFor, decorFor, pickTile: i => { ui.fwd = null; selectTile(i); } });
   const clean = (v, n) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, n);
   const lastLogId = () => S.log.length ? S.log[S.log.length - 1].id : 0;
   function loadScript(src) {
@@ -8956,6 +9093,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     const saved = store.get(NAME_KEY) || {};
     $('onName').value = saved.name || '';
     $('onVillage').value = saved.village || ($('vnameInput').value || '').trim() || TR('Nybygget');
+    renderAvaPick('onAvaPick', myAvatar());
     onError('');
     showOnlineView('browse');
     $('ov-start').hidden = true;
@@ -8993,52 +9131,91 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       else if (l.n >= MAXP) btn = TR('<button class="btn" type="button" disabled>Full</button>');
       else btn = '<button class="btn primary" type="button" data-act="on-join" data-id="' + id + TR('">Gå med</button>');
       return '<div class="item">' + icon('t-village') +
-        '<div class="t"><b>' + esc(l.name) + '</b><small>' + esc(l.host) + ' · ' + l.n + TR(' av ') + MAXP + TR(' spelare · ') + spdTxt(l.speed) + (l.started ? TR(' · pågår') : '') + '</small></div>' + btn + '</div>';
+        '<div class="t"><b>' + esc(l.name) + '</b><small>' + esc(l.host) + ' · ' + l.n + TR(' av ') + MAXP + TR(' spelare · ') + spdTxt(l.speed) + ' · ' + (l.vp || 100) + TR(' vinstpoäng') + (l.started ? TR(' · pågår') : '') + '</small></div>' + btn + '</div>';
     }).join('');
   }
+  // Avatarväljaren: 12 porträtt. taken = avatarer som andra i lobbyn redan har.
+  function renderAvaPick(id, cur, taken) {
+    const el = $(id);
+    if (!el) return;
+    const sig = cur + '|' + [...(taken || [])].join(',');
+    if (el.dataset.sig === sig) return;
+    el.dataset.sig = sig;
+    el.innerHTML = AVAS.map((a, i) => '<button type="button" data-act="ava" data-ava="' + i + '" aria-pressed="' + (i === cur) + '" title="' + esc(avatarName(i)) + '" aria-label="' + esc(avatarName(i)) + '"' + (taken && taken.has(i) ? ' disabled' : '') + '>' + avatarSVG(i) + '</button>').join('');
+  }
+  function pickAva(i) {
+    if (!(i >= 0 && i < AVAS.length)) return;
+    store.set(AVATAR_KEY, i);
+    if (NET.view === 'room' && NET.role === 'host' && NET.lobby && !NET.lobby.started) {
+      if (NET.lobby.players.some((p, k) => k > 0 && p.avatar === i)) return;
+      NET.lobby.players[0].avatar = i; roomChanged(); return;
+    }
+    if (NET.view === 'room' && NET.role === 'guest' && NET.link) { NET.link.send({ k: 'ava', a: i }); return; }
+    renderAvaPick('onAvaPick', i);
+  }
+  const freeAvatar = (lob, want) => {
+    const used = new Set(lob.players.map(p => p.avatar));
+    if (want >= 0 && want < AVAS.length && !used.has(want)) return want;
+    const free = AVAS.map((a, i) => i).filter(i => !used.has(i));
+    return free.length ? free[Math.floor(Math.random() * free.length)] : 0;
+  };
   function myIdent() {
     const name = clean($('onName').value, 16), village = clean($('onVillage').value, 24) || TR('Nybygget');
     if (!name) { onError(TR('Skriv ditt namn först.')); $('onName').focus(); return null; }
     store.set(NAME_KEY, { name, village });
-    return { name, village };
+    return { name, village, avatar: myAvatar() };
   }
   function renderRoom() {
     const host = NET.role === 'host';
     const r = host ? Object.assign({ you: 0 }, roomData()) : NET.room;
     if (!r || $('ov-online').hidden) return;
     setText($('onTitle'), r.name);
-    setText($('onRoomInfo'), host ? TR('Lobbyn syns nu för andra under Spela online. Starta när alla är med, 2–4 spelare.') : TR('Du är med. Värden startar spelet när alla är med.'));
+    setText($('onRoomInfo'), host ? TR('Lobbyn syns nu för andra under Spela online. Starta när alla är med, 2–8 spelare.') : TR('Du är med. Värden startar spelet när alla är med.'));
     const cols = E.CONFIG.playerColors;
     let html = r.players.map((p, i) =>
-      '<div class="stand"><span class="dot" style="background:' + cols[i % cols.length][0] + '"></span>' +
+      '<div class="stand with-ava"><span class="ava-dot" style="--pc:' + cols[i % cols.length][0] + '">' + avatarSVG(p.avatar || 0) + '</span>' +
         '<div class="who">' + esc(p.name) + (i === r.you ? TR(' (du)') : '') + '<small>' + esc(p.village) + (p.on ? '' : TR(' · ansluter …')) + '</small></div>' +
         '<span class="stand-end"><span class="tag ' + (p.host ? 'mine' : 'neutral') + '">' + (p.host ? TR('Värd') : p.bot ? TR('Bot · ') + RIVAL_LEVELS[p.bot].toLowerCase() : TR('Gäst')) + '</span>' +
         (host && p.bot ? '<button class="icon-btn sm" type="button" data-act="on-rmbot" data-i="' + i + TR('" aria-label="Ta bort ') + esc(p.name) + '">' + icon('i-close') + '</button>' : '') + '</span></div>').join('');
     for (let i = r.players.length; i < MAXP; i++) html += TR('<div class="stand slot"><span class="dot"></span><div class="who">Ledig plats</div><span></span></div>');
     $('onPlayers').innerHTML = html;
+    const mine = r.players[r.you];
+    renderAvaPick('onRoomAva', mine ? mine.avatar : -1, new Set(r.players.filter((p, i) => i !== r.you).map(p => p.avatar)));
+    const vp = r.vp || 100;
+    setText($('onVp'), String(vp));
+    $('onVpMinus').hidden = $('onVpPlus').hidden = !host;
+    $('onVpMinus').disabled = vp <= VP_MIN; $('onVpPlus').disabled = vp >= VP_MAX;
     const n = r.players.length;
     $('onBotRow').hidden = !host || n >= MAXP;
     $('onStartBtn').hidden = !host;
     $('onStartBtn').disabled = n < 2;
     setText($('onStartBtn'), n < 2 ? TR('Väntar på spelare') : TR('Starta spelet'));
     setText($('onRoomHint'), host ? TR('Spelet börjar i 1×. Du kan ändra hastigheten under spelet. Bottarna körs i din webbläsare.') :
-      TR('Väntar på att ') + (r.players[0] ? r.players[0].name : TR('värden')) + TR(' startar spelet.'));
+      TR('Väntar på att ') + (r.players[0] ? r.players[0].name : TR('värden')) + TR(' startar spelet. Först till ') + (r.vp || 100) + TR(' vinstpoäng vinner.'));
   }
 
   // ---------- Värd ----------
+  // Poängmålet i lobbyn: värden ändrar det i steg om 25. [antagande: 25–500]
+  const VP_STEP = 25, VP_MIN = 25, VP_MAX = 500;
   function lobbyInfo() {
     const lob = NET.lobby;
-    return { id: lob.id, v: PROTO, name: lob.name, host: lob.players[0].name, n: lob.players.length, speed: lob.speed, started: !!lob.started, ts: Date.now() };
+    return { id: lob.id, v: PROTO, name: lob.name, host: lob.players[0].name, n: lob.players.length, speed: lob.speed, vp: lob.vp || 100, started: !!lob.started, ts: Date.now() };
   }
   function roomData() {
     const lob = NET.lobby;
-    return { id: lob.id, name: lob.name, speed: lob.speed, started: lob.started,
-      players: lob.players.map(p => ({ name: p.name, village: p.village, host: !!p.host, bot: p.bot || null, on: !!p.on })) };
+    return { id: lob.id, name: lob.name, speed: lob.speed, vp: lob.vp || 100, started: lob.started,
+      players: lob.players.map(p => ({ name: p.name, village: p.village, host: !!p.host, bot: p.bot || null, on: !!p.on, avatar: p.avatar || 0 })) };
   }
   function lobbySave() {
     const lob = NET.lobby;
-    return { id: lob.id, name: lob.name, speed: lob.speed, started: true,
-      players: lob.players.map(p => ({ name: p.name, village: p.village, token: p.token, host: !!p.host, bot: p.bot || null, pid: p.pid })) };
+    return { id: lob.id, name: lob.name, speed: lob.speed, vp: lob.vp || 100, started: true,
+      players: lob.players.map(p => ({ name: p.name, village: p.village, token: p.token, host: !!p.host, bot: p.bot || null, pid: p.pid, avatar: p.avatar || 0 })) };
+  }
+  function setLobbyVp(d) {
+    const lob = NET.lobby;
+    if (!lob || NET.role !== 'host' || lob.started) return;
+    lob.vp = clamp((lob.vp || 100) + d, VP_MIN, VP_MAX);
+    roomChanged();
   }
   function roomChanged() {
     const lob = NET.lobby;
@@ -9063,8 +9240,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     try { tr = await getTransport(); } catch (e) { onError(e.message); return; }
     if (NET.unwatch) { NET.unwatch(); NET.unwatch = null; }
     const gen = /[sxz]$/i.test(me0.name) ? me0.name + TR(' lobby') : me0.name + TR('s lobby');
-    NET.lobby = { id: rid(8), name: clean($('onLobbyName').value, 30) || gen, speed: 1, started: false,
-      players: [{ name: me0.name, village: me0.village, token: 'host', host: true, on: true }] };
+    NET.lobby = { id: rid(8), name: clean($('onLobbyName').value, 30) || gen, speed: 1, vp: 100, started: false,
+      players: [{ name: me0.name, village: me0.village, token: 'host', host: true, on: true, avatar: me0.avatar }] };
     NET.role = 'host';
     NET.hostH = tr.host(lobbyInfo(), onGuestLink);
     showOnlineView('room');
@@ -9094,6 +9271,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         if (lob.started) return deny(TR('Spelet har redan börjat.'));
         if (lob.players.length >= MAXP) return deny(TR('Lobbyn är full.'));
         pl = { name: clean(m.name, 16) || TR('Gäst'), village: clean(m.village, 24) || TR('Nybygget'), token: clean(m.token, 32), on: true };
+        pl.avatar = freeAvatar(lob, m.avatar | 0);
         lob.players.push(pl);
       }
       if (pl.link && pl.link !== L) { const old = pl.link; pl.link = null; old.drop(); }
@@ -9117,6 +9295,11 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   }
   function hostMsg(pl, m) {
     if (m.k === 'bye') { pl.left = true; if (pl.link) pl.link.drop(); return; }
+    if (m.k === 'ava') {   // gästen byter avatar i lobbyn (bara en som ingen annan har)
+      const lob = NET.lobby, a = m.a | 0;
+      if (lob && !lob.started && a >= 0 && a < AVAS.length && !lob.players.some(p => p !== pl && p.avatar === a)) { pl.avatar = a; roomChanged(); }
+      return;
+    }
     if (m.k !== 'act' || !NET.lobby || !NET.lobby.started || !S || !pl.pid || !pl.link) return;
     // Spelaren tas alltid från anslutningen, aldrig från meddelandet.
     const r = S.winner ? { ok: false, error: TR('Spelet är slut.') } : E.apply(S, Object.assign({}, m.a, { player: pl.pid }));
@@ -9134,7 +9317,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if (!lob || NET.role !== 'host' || lob.started || lob.players.length >= MAXP || !RIVAL_LEVELS[level]) return;
     const used = new Set(lob.players.map(p => p.village.toLowerCase()));
     const names = E.CONFIG.rivalVillageNames.filter(x => !used.has(x.toLowerCase()));
-    lob.players.push({ name: TR('Bot'), village: names[Math.floor(Math.random() * names.length)] || 'Botby', bot: level, on: true, token: 'bot-' + rid(8) });
+    lob.players.push({ name: TR('Bot'), village: names[Math.floor(Math.random() * names.length)] || 'Botby', bot: level, on: true, token: 'bot-' + rid(8), avatar: freeAvatar(lob, -1) });
     lob.players.filter(p => p.bot).forEach((p, k) => { p.name = TR('Bot ') + (k + 1); });
     roomChanged();
   }
@@ -9150,7 +9333,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if (!lob || NET.role !== 'host' || lob.started) return;
     lob.players = lob.players.filter(p => p.host || p.bot || p.link);
     if (lob.players.length < 2) { roomChanged(); return; }
-    const st = E.createGame({ humans: lob.players.map(p => ({ name: p.name, villageName: p.village, bot: p.bot || null })) });
+    const st = E.createGame({ vpToWin: lob.vp || 100, humans: lob.players.map(p => ({ name: p.name, villageName: p.village, bot: p.bot || null, avatar: p.avatar })) });
     lob.players.forEach((p, i) => { p.pid = 'p' + (i + 1); });
     lob.started = true;
     ME = 'p1';
@@ -9192,7 +9375,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       rj.set({ lobby: id, name: ident.name, village: ident.village, token: ident.token, at: Date.now() });
       L.onmsg = guestMsg;
       L.onclose = () => guestLost(L);
-      L.send({ k: 'hello', v: PROTO, name: ident.name, village: ident.village, token: ident.token });
+      L.send({ k: 'hello', v: PROTO, name: ident.name, village: ident.village, token: ident.token, avatar: myAvatar() });
     }, err => { NET.joining = false; joinFailed(err.message); });
   }
   function joinFailed(msg) {
@@ -9365,7 +9548,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       TR('<b>Byn</b> har ') + E.PLOTS + TR(' tomter. Tryck på en ledig tomt för att bygga något nytt, och på en byggnad för att bygga ut den eller använda den, till exempel verkstadens förbättringar.') + TR(' Muren byggs för sig på ringen runt byn och syns både i byn och på kartan.'),
       TR('<b>Två rivaler</b> spelar efter samma regler, dimman inräknad. De anfaller dig och varandra, slåss om kullen och går hellre på den som leder med mer än ') + c.leaderLead + TR(' vinstpoäng.'),
       TR('<b>Veckospel</b>: plats för ') + c.week.players + TR(' spelare, ') + (c.week.regionsPerSlot || c.regionsPerPlayer) + TR(' rutor per spelare, och spelet pågår i ') + c.week.days + TR(' dagar även när du inte är inne. Bara byplatser där någon spelar finns på kartan; resten är hav tills en ny spelare går med, utom de ') + (c.week.base || 0) + TR(' innersta rutorna i varje del (basen) som alltid finns runt kullen. Varannan plats fylls först, så kartan börjar som en stjärna. Den som går med efter första timmen är immun i ') + (c.week.immunityHours || 6) + TR(' timmar: ingen kan anfalla dem och de kan inte anfalla andra spelare. Byggen tar en stund (') + D(E.buildMs({ cfg: { build: c.week.build } }, 1)) + TR(' för nivå 1) och du kan köa ett bygge till. Den som har flest vinstpoäng när tiden är ute vinner. Den som går med senare får +') + Math.round(c.week.joinBonusPerDay * 100) + TR(' % guld för varje hel dag som gått. Topplistan visar också vinstpoäng per timme och dödade fiender i anfall och försvar (neutrala räknas inte).'),
-      TR('<b>Online</b>: 2–4 spelare, ungefär ') + c.regionsPerPlayer + TR(' rutor per spelare. En spelare skapar en lobby och kan fylla på med bottar; de andra går med under Spela online. Spelet börjar i 1×. Värden kör spelet och kan ändra hastigheten under spelets gång, så det går bara medan värden har det öppet. Tappar du anslutningen kan du återansluta, och värden kan fortsätta ett sparat onlinespel senare.'),
+      TR('<b>Online</b>: 2–8 spelare, ungefär ') + c.regionsPerPlayer + TR(' rutor per spelare. En spelare skapar en lobby, väljer hur många vinstpoäng som krävs och kan fylla på med bottar; de andra går med under Spela online. Alla väljer en avatar. Spelet börjar i 1×. Värden kör spelet och kan ändra hastigheten under spelets gång, så det går bara medan värden har det öppet. Tappar du anslutningen kan du återansluta, och värden kan fortsätta ett sparat onlinespel senare.'),
     ].map(x => '<li>' + x + '</li>').join('');
   }
   $('rulesStart').innerHTML = rulesHTML();
