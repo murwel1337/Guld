@@ -785,7 +785,7 @@ details[open] summary { margin-bottom: 10px; }
 @media (max-width: 400px) { .tab { font-size: 12px; } }
 
 /* Alla-knapp per trupptyp */
-.urow { grid-template-columns: 22px minmax(0, 1fr) auto auto; }
+.urow { grid-template-columns: 22px minmax(0, 1fr) auto auto auto; }
 .urow .chip { padding: 5px 9px; }
 
 /* Färdigheter */
@@ -1027,6 +1027,15 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .tal-head h3, .tal-name { text-shadow: 0 1px 2px #000, 0 0 6px rgba(0, 0, 0, .9); }
 .tal-name { color: var(--ink); }
 .tal.locked .tal-name { opacity: .75; }
+
+/* Trupprader: Ingen och Lås till 0 */
+.urow .un { display: grid; }
+.urow .lock0 { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; font-size: 12px; color: var(--ink-faint); cursor: pointer; }
+.urow .lock0 input { width: 14px; height: 14px; margin: 0; accent-color: var(--gold); }
+.urow.locked .lock0 { color: var(--gold); }
+.urow.locked .uic, .urow.locked .un > :not(.lock0) { opacity: .5; }
+.urow .chip:disabled, .urow .stepper button:disabled, .urow .stepper input:disabled { opacity: .4; cursor: default; }
+.urow .chip.none { padding: 5px 8px; }
 
 </style>
 </head>
@@ -1442,6 +1451,7 @@ const Engine = (function () {
     workshopSpeedFactor: 0.9,     // varje verkstadsnivå över 1 gör förbättringarna 10 % snabbare
     // Neutrala soldater: [antagande] 1–2 på rutorna närmast byarna, 2–4 längre bort.
     neutralCap: 3,                // neutrala blir aldrig fler än 3 på en ruta (kullen börjar med fler)
+    spawnGraceMinutes: 5,         // inga nya neutrala (banditer) de första 5 minuterna
     spawnBaseChance: 0.20,        // chans per minut för en ny neutral soldat ...
     spawnChancePerMinute: 0.005,  // ... som ökar för varje spelad minut
     vpPerRegionMinutes: 10,       // varje kontrollerad ruta ger 1 vinstpoäng per 10 minuter
@@ -2100,11 +2110,11 @@ const Engine = (function () {
     const core = week ? week.core || 0 : 0;
     const n = week ? 1 + (week.regionsPerSlot || cfg.regionsPerPlayer) * slots + core : roundRegionCount(cfg, slots);
     const s = {
-      v: VERSION, cfg, seed, rng: seed, time: 0, nextSpawnAt: MINUTE,
+      v: VERSION, cfg, seed, rng: seed, time: 0, nextSpawnAt: MINUTE * (cfg.spawnGraceMinutes || 1),
       map: null, tiles: [], towns: {}, players: {}, order: [], armies: [], log: [],
       nextId: 1, winner: null, endedAt: null, online: !!humans,
     };
-    if (week) { s.week = true; s.nextSpawnAt = MINUTE * cfg.pace; }
+    if (week) { s.week = true; s.nextSpawnAt = MINUTE * cfg.pace * (cfg.spawnGraceMinutes || 1); }
     // Rund karta. Bland några varianter väljs en där byarna inte ligger för nära kullen eller varandra.
     const K = slots;
     let M = null, mseed = seed, bestSc = -Infinity, bestEq = false;
@@ -2159,6 +2169,11 @@ const Engine = (function () {
     // Guldgruvor: var femte varv av rutor (aldrig kullen eller en ruta bredvid en byplats).
     const counts = {}, mines = {};
     const nearVillage = i => s.tiles[i].adj.some(j => s.tiles[j].type === 'village');
+    // Rutorna bredvid byarna (det man ser från början) får omväxlande 1 och 2 neutrala. Varvet (gruppen) bestämmer
+    // antalet, och kartan är likadan runt om, så alla spelare börjar med lika många rutor med 1 och med 2.
+    const groupOf = i => Math.floor((i - 1 - K) / K);
+    [...new Set(s.tiles[villages[0]].adj.filter(i => i > K && !s.tiles[i].core).map(groupOf))].sort((a, b) => a - b)
+      .forEach((g, k) => { counts[g] = 1 + (k % 2); mines[g] = false; });
     s.tiles.forEach((t, i) => {
       if (t.type === 'village') return;
       if (t.hill) { t.u.soldier = cfg.hill.startNeutrals; syncTile(t); return; }
@@ -4234,8 +4249,6 @@ window.GP_EN = {
 "Två bottar tar neutrala rutor men anfaller andra spelare först efter 20 minuter och förstärker inte hotade rutor.": "Two bots take neutral territories but only attack other players after 20 minutes, and they do not reinforce threatened territories.",
 "Två bottar tävlar om rutorna, försvarar sina gränser och anfaller både dig och varandra.": "Two bots compete for the territories, defend their borders and attack both you and each other.",
 "Varje ruta du kontrollerar, byn inräknad, ger <b>1 vinstpoäng per ": "Every territory you control, the village included, gives <b>1 victory point every ",
-"På <b>neutrala rutor</b> står neutrala soldater, högst ": "<b>Neutral territories</b> hold neutral soldiers, at most ",
-". Nya dyker upp med ": ". New ones appear with a ",
 "Utposten kan byggas ut till nivå ": "The outpost can be upgraded to level ",
 " (": " (",
 " i grundförsvar. En <b>mur</b> i utposten ger +": " base defence. A <b>wall</b> in the outpost gives +",
@@ -4622,7 +4635,12 @@ window.GP_EN = {
 "Ingen av dina överlevde.": "None of yours survived.",
 "<b>Fältslag</b>: anfaller två spelare varandra längs samma väg samtidigt möts arméerna på vägen och slåss där med anfallspoäng på båda sidor, utan murar, utposter eller grundförsvar. De som överlever fortsätter mot sitt mål.": "<b>Field battles</b>: if two players attack each other along the same route at the same time, the armies meet on the way and fight there with attack points on both sides, without walls, outposts or base defence. The survivors continue towards their target.",
 " procentenheter varje gång. Medan ett anfall är på väg mot en neutral ruta dyker inga nya upp där. Varje neutral soldat du dödar ger <b>": " percentage points each time. While an attack is on its way to a neutral territory, no new ones appear there. Each neutral soldier you kill gives <b>",
-"<b>Dimma</b>: du ser alltid vem som kontrollerar varje ruta, men hur många trupper som står där ser du bara på dina rutor och deras grannar. Kullen syns alltid för alla. Fiendens trupper som går hem efter ett anfall mot dig syns hela vägen, med antal.": "<b>Fog</b>: you can always see who controls each territory, but how many troops stand there you only see on your territories and their neighbours. The Hill is always visible to everyone. Enemy troops going home after an attack on you are visible all the way, with their number."
+"<b>Dimma</b>: du ser alltid vem som kontrollerar varje ruta, men hur många trupper som står där ser du bara på dina rutor och deras grannar. Kullen syns alltid för alla. Fiendens trupper som går hem efter ett anfall mot dig syns hela vägen, med antal.": "<b>Fog</b>: you can always see who controls each territory, but how many troops stand there you only see on your territories and their neighbours. The Hill is always visible to everyone. Enemy troops going home after an attack on you are visible all the way, with their number.",
+"På <b>neutrala rutor</b> står neutrala soldater (banditer), högst ": "On <b>neutral territories</b> there are neutral soldiers (bandits), at most ",
+". Rutorna bredvid varje by börjar med 1 eller 2, och alla spelare får lika många av varje. Efter de första ": ". The territories next to each village start with 1 or 2, and every player gets the same number of each. After the first ",
+" dyker nya upp med ": " new ones appear with ",
+"Lås till 0": "Lock to 0",
+"Inga ": "No "
 };
 window.GP_EN_BODY = {
 "Inställningar": "Settings",
@@ -4764,7 +4782,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   const NAME_KEY = 'guld-och-potatis:name:v1';
   const AVATAR_KEY = 'guld-och-potatis:avatar:v1';   // vald avatar (0–11), används online och i singleplayer
   const MODE_KEY = 'guld-och-potatis:mode:v1';
-  const STAY_KEY = 'guld-och-potatis:stay:v1';      // "stanna och försvara" gäller tills spelaren tar bort det     // startskärmens flik: 'solo' (Spela ensam) eller 'online'
+  const STAY_KEY = 'guld-och-potatis:stay:v1';
+  const LOCK_KEY = 'guld-och-potatis:lock0:v1';     // trupptyper som är låsta till 0 när man skickar trupper      // "stanna och försvara" gäller tills spelaren tar bort det     // startskärmens flik: 'solo' (Spela ensam) eller 'online'
   // Onlineläge. role: null (singleplayer), 'host' eller 'guest'. view: 'browse', 'room' eller 'game'.
   const NET = { role: null, view: null, lobby: null, hostH: null, link: null, room: null, init: null, list: [], unwatch: null,
     tr: null, pending: 0, pendingAt: 0, reqId: 0, lastSend: 0, on: {}, lobbyId: null, joining: false, ended: false, leaving: false };
@@ -4894,10 +4913,31 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   ui.stayKeep = store.get(STAY_KEY) === true;
   ui.stay = ui.stayKeep;
   function setStayKeep(v) { ui.stayKeep = !!v; store.set(STAY_KEY, ui.stayKeep); }
+  // "Lås till 0": den trupptypen är alltid 0 när man skickar trupper (Skicka och Flytta armé), tills man låser upp.
+  ui.lock0 = store.get(LOCK_KEY) || {};
+  const lockedU = u => { const o = E.U(u); for (const k in ui.lock0) if (ui.lock0[k]) o[k] = 0; return o; };
+  function setLock0(k, on) {
+    if (on) ui.lock0[k] = true; else delete ui.lock0[k];
+    store.set(LOCK_KEY, ui.lock0);
+    if (on) { if (ui.sendU) ui.sendU[k] = 0; if (ui.fwd) ui.fwd.u[k] = 0; }
+  }
+  // En rad per trupptyp: namn och "Lås till 0" till vänster, sedan Ingen, − antal +, Alla. p = 'u' (Skicka) eller 'fu' (Flytta armé).
+  function unitRowHTML(k, p, inputId, haveId) {
+    const L = !!ui.lock0[k], dis = L ? ' disabled' : '';
+    return '<div class="urow' + (L ? ' locked' : '') + '" data-urow="' + k + '">' + icon(UNITS[k].icon, 'uic') +
+      '<span class="un">' + UNITS[k].name + '<small id="' + haveId + '"></small>' +
+        '<label class="lock0"><input type="checkbox" data-lock="' + k + '"' + (L ? ' checked' : '') + '><span>' + TR('Lås till 0') + '</span></label></span>' +
+      '<button class="chip none" type="button" data-act="' + p + '-none" data-unit="' + k + '" aria-label="' + TR('Inga ') + UNITS[k].many + '"' + dis + '>' + TR('Ingen') + '</button>' +
+      '<div class="stepper sm"><button type="button" data-act="' + p + '-minus" data-unit="' + k + '" aria-label="' + TR('Färre ') + UNITS[k].many + '"' + dis + '>−</button>' +
+      '<input id="' + inputId + '" type="number" inputmode="numeric" min="0" value="0" aria-label="' + TR('Antal ') + UNITS[k].many + '"' + dis + '>' +
+      '<button type="button" data-act="' + p + '-plus" data-unit="' + k + '" aria-label="' + TR('Fler ') + UNITS[k].many + '"' + dis + '>+</button></div>' +
+      '<button class="chip" type="button" data-act="' + p + '-all" data-unit="' + k + '" aria-label="' + TR('Alla ') + UNITS[k].many + '"' + dis + '>' + TR('Alla') + '</button></div>';
+  }
   ui.roiOpen = {};   // vilka ROI-rutor som visar sin förklaring
   document.addEventListener('change', e => {
     if (e.target && e.target.id === 'stayChk') { ui.stay = e.target.checked; if (!ui.stay) setStayKeep(false); updateSheet(); }
     if (e.target && e.target.id === 'stayKeep') { setStayKeep(e.target.checked); updateSheet(); }
+    if (e.target && e.target.dataset && e.target.dataset.lock) { setLock0(e.target.dataset.lock, e.target.checked); ui.rowSig = ui.fwdSig = ''; if (ui.fwd) updateFwd(); else updateSheet(); }
     if (e.target && e.target.id === 'fwdStay' && ui.fwd) { ui.fwd.stay = e.target.checked; if (!ui.fwd.stay) setStayKeep(false); updateFwd(); }
     if (e.target && e.target.id === 'fwdKeep' && ui.fwd) { setStayKeep(e.target.checked); if (ui.stayKeep) ui.stay = true; updateFwd(); }
     if (e.target && (e.target.id === 'repAtk' || e.target.id === 'repDef')) { ui.repAtk = $('repAtk').checked; ui.repDef = $('repDef').checked; renderReports(); }
@@ -5036,11 +5076,12 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     } catch (e) { /* inget ljud */ }
   }
   // ---------- Händelseljud ----------
-  // Fyra korta ljud som skapas med Web Audio (ingen ljudfil), så olika som möjligt:
+  // Fem korta ljud som skapas med Web Audio (ingen ljudfil), så olika som möjligt:
   //   charge  du har skickat ett anfall: krigshorn och två trumslag
   //   alarm   ett anfall är på väg mot dig: larmklocka, fyra snabba slag
   //   unlock  forskningscentret har låst upp en ny trupptyp: stigande klockspel med glitter
   //   hill    någon ny tar kullen: trumpetfanfar med pukvirvel och cymbal
+  //   levelup du når en ny nivå: harpglissando, ljust ackord och glitter (längre ned)
   // Varje funktion ritar ljudet i ctx c till out från tiden t och returnerar hur långt det är (s).
   const SFXN = new WeakMap();
   const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
@@ -5126,7 +5167,22 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       return 1.9;
     },
   };
-  const SFX_VOL = { charge: 0.45, alarm: 1.45, unlock: 1.3, hill: 0.68 };   // uppmätt: alla ungefär lika starka som ljudet när en trupp är klar (−19 LUFS)
+  // levelup: ny nivå: en harpglissando uppåt (C-dur, två oktaver), ett ljust ackord och glitter.
+  SFX.levelup = (c, out, t) => {
+    const sc = [0, 2, 4, 5, 7, 9, 11], dt = 0.034;
+    for (let k = 0; k < 15; k++) {
+      const m = 60 + Math.floor(k / 7) * 12 + sc[k % 7], tk = t + k * dt, fr = mtof(m);
+      sOsc(c, 'triangle', fr, tk, tk + 0.65, sEnv(c, out, tk, 0.004, 0.11, 0, 0.55));
+      sOsc(c, 'sine', fr * 2, tk, tk + 0.32, sEnv(c, out, tk, 0.003, 0.035, 0, 0.25));
+    }
+    const sw = sNoise(c, out, t, 0.6, 'bandpass', 600, 2, 0.03);
+    sw.fl.frequency.setValueAtTime(600, t); sw.fl.frequency.exponentialRampToValueAtTime(6000, t + 0.55);
+    const top = t + 15 * dt;
+    [72, 76, 79, 84].forEach(m => { const g = sEnv(c, out, top, 0.06, 0.07, 0.35, 0.8); [-7, 7].forEach(det => sOsc(c, 'triangle', mtof(m), top, top + 1.3, g, det)); });
+    [96, 100, 103, 108].forEach((m, i) => { const tk = top + 0.05 + i * 0.07; sOsc(c, 'sine', mtof(m), tk, tk + 0.55, sEnv(c, out, tk, 0.002, 0.05, 0, 0.5)); });
+    return 1.8;
+  };
+  const SFX_VOL = { charge: 0.45, alarm: 1.45, unlock: 1.3, hill: 0.68, levelup: 1.45 };   // levelup uppmätt till samma nivå (−19,8 LUFS)   // uppmätt: alla ungefär lika starka som ljudet när en trupp är klar (−19 LUFS)
   const sfxUntil = {};
   function playSfx(kind) {
     if (!sfx.on || !sfx.ctx || document.hidden || sfx.ctx.state !== 'running') return;
@@ -5150,18 +5206,18 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     const ho = H >= 0 ? S.tiles[H].owner || null : null, ids = new Set(S.armies.map(a => a.id));
     const lastLog = S.log.length ? S.log[S.log.length - 1].id : 0;
     if (key !== sfxSeen.key || S.time < sfxSeen.t) { Object.assign(sfxSeen, { key, armies: ids, log: lastLog, hill: ho, t: S.time }); return; }
-    let charge = false, alarm = false, unlock = false, hill = false;
+    let charge = false, alarm = false, unlock = false, hill = false, lvl = false;
     for (const a of S.armies) {
       if (sfxSeen.armies.has(a.id) || a.kind !== 'attack') continue;
       if (a.owner === ME) charge = true;
       else { const t = S.tiles[a.to]; if (t && (t.owner === ME || t.occ === ME)) alarm = true; }
     }
-    for (const e of S.log) if (e.id > sfxSeen.log && e.kind === 'unlocked' && e.player === ME) unlock = true;
+    for (const e of S.log) if (e.id > sfxSeen.log && e.player === ME) { if (e.kind === 'unlocked') unlock = true; if (e.kind === 'levelup') lvl = true; }
     if (ho && ho !== sfxSeen.hill) hill = true;
     Object.assign(sfxSeen, { armies: ids, log: Math.max(sfxSeen.log, lastLog), hill: ho, t: S.time });
     if (ui.catching) return;
     // Händer flera saker samtidigt spelas det viktigaste.
-    const kind = alarm ? 'alarm' : hill ? 'hill' : unlock ? 'unlock' : charge ? 'charge' : null;
+    const kind = alarm ? 'alarm' : hill ? 'hill' : lvl ? 'levelup' : unlock ? 'unlock' : charge ? 'charge' : null;
     if (kind) playSfx(kind);
   }
   function setSound(on) {
@@ -5279,6 +5335,37 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     }
   }
   // Etikett (antal trupper eller "?") centrerad på cx, cy.
+  // Trupperna på en ruta eller i en by: en rad per trupptyp med ikon och antal, lodrätt under varandra
+  // (första raden där siffran brukade stå). Neutrala visas med en bandit i stället för soldathjälmen.
+  const unitImgs = {};
+  function unitImg(k) {
+    let im = unitImgs[k];
+    if (!im) {
+      im = unitImgs[k] = new Image();
+      let svg = '';
+      if (k === 'bandit') svg = avatarSVG('bandit').replace('<svg class="ava"', '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"');
+      else { const sy = document.getElementById(UNITS[k].icon); if (sy) svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="' + (sy.getAttribute('viewBox') || '0 0 24 24') + '" width="64" height="64">' + sy.innerHTML + '</svg>'; }
+      if (svg) im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+    return im.complete && im.naturalWidth ? im : null;
+  }
+  function drawUnitStack(c, x, y, u, color, fs, neutral) {
+    const ks = KEYS.filter(k => (u[k] || 0) > 0);
+    if (!ks.length) return;
+    const h = fs + 6, ic = fs + 2;
+    c.font = '700 ' + fs + 'px ' + NUMFONT;
+    const w = Math.max(...ks.map(k => c.measureText(String(u[k])).width)) + ic + 13, H = ks.length * h + 2, top = y - h / 2 - 1;
+    rr(c, x - w / 2, top, w, H, Math.min(8, h / 2));
+    c.fillStyle = color || 'rgba(14,18,17,.86)'; c.fill();
+    c.lineWidth = 1; c.strokeStyle = color ? 'rgba(255,240,220,.55)' : 'rgba(236,230,212,.25)'; c.stroke();
+    c.textAlign = 'right'; c.textBaseline = 'middle';
+    ks.forEach((k, i) => {
+      const cy = top + 1 + h * i + h / 2, ix = x - w / 2 + 4, im = unitImg(neutral && k === 'soldier' ? 'bandit' : k);
+      c.fillStyle = 'rgba(255,255,255,.2)'; c.beginPath(); c.arc(ix + ic / 2, cy, ic / 2 + 1, 0, Math.PI * 2); c.fill();
+      if (im) c.drawImage(im, ix, cy - ic / 2, ic, ic);
+      c.fillStyle = color ? '#fff7ec' : PAL.ink; c.fillText(String(u[k]), x + w / 2 - 5, cy + 1);
+    });
+  }
   function drawBadge(c, cx, cy, text, color, fs) {
     c.font = '700 ' + fs + 'px ' + NUMFONT;
     const tw = c.measureText(text).width;
@@ -6562,7 +6649,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       const bx = t.type === 'village' ? cx + vz * 0.42 : t.hill ? cx + clamp(s * 1.05, 9, 36) : cx + (t.post ? clamp(s * 0.45, 6, 16) : 0);
       const by = t.type === 'village' ? cy + vz * 0.3 : t.hill ? cy + clamp(s * 0.35, 3, 12) : cy + (t.post ? clamp(s * 0.15, 2, 6) : 0);
       if (s < 7) { c.fillStyle = col || PAL.ink; c.beginPath(); c.arc(bx, by, 2.5, 0, Math.PI * 2); c.fill(); return; }
-      drawBadge(c, bx, by, String(n), col, fs);
+      if (n > 0 && s >= 9) drawUnitStack(c, bx, by, E.defendersAt(st, i), col, fs, !t.owner && !t.occ && t.type !== 'village');
+      else drawBadge(c, bx, by, String(n), col, fs);
     });
     // Uppgraderade guldgruvor: nivån i en liten guldbricka vid gruvan.
     if (s >= 8) for (const m of decorFor(st).mines) {
@@ -7509,11 +7597,11 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     const op = owner && owner !== ME ? S.players[owner] : null;
     const info = mineT(t) ? null : E.visibleTroops(S, ME, idx);
     const def = E.tileDefense(S, idx, false, p);   // andras verkstad syns inte; Stridsduglig räknas med
-    const aM = E.attackVec(S, p, true), avail = E.U(availIn || fromU());
+    const aM = E.attackVec(S, p, true), avail = lockedU(availIn || fromU());
     let need = null, safe = null;
     if (info) {
       // Räcker inte det som finns räknas det ut med extra soldater, så att du ser hur många som skulle behövas.
-      const plus = E.U(avail); plus.soldier += 999;
+      const plus = E.U(avail); if (!ui.lock0.soldier) plus.soldier += 999;
       const fill = dU => E.fillAttack(S, avail, dU, aM, def.mul, E.ATK, def.flat) || E.fillAttack(S, plus, dU, aM, def.mul, E.ATK, def.flat);
       need = fill(info.u);
       const more = E.U(info.u);
@@ -7757,7 +7845,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   }
   // Vid anfall går det att simulera med fler trupper än du har (som i rutpanelen); annars högst det som finns.
   const fwdAtk = () => !!ui.fwd && ui.fwd.to >= 0 && !mineT(S.tiles[ui.fwd.to]);
-  function fwdSet(k, v) { if (ui.fwd) ui.fwd.u[k] = clamp(v, 0, fwdAtk() ? 9999 : unitsAt(ui.fwd.from)[k] || 0); }
+  function fwdSet(k, v) { if (ui.fwd) ui.fwd.u[k] = ui.lock0[k] ? 0 : clamp(v, 0, fwdAtk() ? 9999 : unitsAt(ui.fwd.from)[k] || 0); }
   function pickFwd(idx) {
     const f = ui.fwd;
     if (idx < 0 || idx === f.from) return;
@@ -7774,17 +7862,12 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     }
     if (f.to >= 0 && !fwdTargets(f.from).includes(f.to)) { f.to = -1; ui.sheetSig = ''; renderSheet(); return; }
     const atkMode = fwdAtk();
-    KEYS.forEach(k => { f.u[k] = clamp(f.u[k] || 0, 0, atkMode ? 9999 : have[k] || 0); });
+    KEYS.forEach(k => { f.u[k] = ui.lock0[k] ? 0 : clamp(f.u[k] || 0, 0, atkMode ? 9999 : have[k] || 0); });
     const ks = KEYS.filter(k => have[k] > 0 || f.u[k] > 0 || (atkMode && E.unitUnlocked(S, me(), k)));
-    const box = $('fwdRows'), sig = ks.join(',');
+    const box = $('fwdRows'), sig = ks.join(',') + ':' + ks.filter(k => ui.lock0[k]).join(',');
     if (sig !== ui.fwdSig) {
       ui.fwdSig = sig;
-      box.innerHTML = ks.map(k =>
-        '<div class="urow">' + icon(UNITS[k].icon, 'uic') + '<span class="un">' + UNITS[k].name + '<small id="fhave-' + k + '"></small></span>' +
-        '<div class="stepper sm"><button type="button" data-act="fu-minus" data-unit="' + k + '" aria-label="' + TR('Färre ') + UNITS[k].many + '">−</button>' +
-        '<input id="fwdu-' + k + '" type="number" inputmode="numeric" min="0" value="0" aria-label="' + TR('Antal ') + UNITS[k].many + '">' +
-        '<button type="button" data-act="fu-plus" data-unit="' + k + '" aria-label="' + TR('Fler ') + UNITS[k].many + '">+</button></div>' +
-        '<button class="chip" type="button" data-act="fu-all" data-unit="' + k + '" aria-label="' + TR('Alla ') + UNITS[k].many + '">' + TR('Alla') + '</button></div>').join('');
+      box.innerHTML = ks.map(k => unitRowHTML(k, 'fu', 'fwdu-' + k, 'fhave-' + k)).join('');
       ks.forEach(k => {
         $('fwdu-' + k).addEventListener('input', e => { const v = parseInt(e.target.value, 10); if (v >= 0) { fwdSet(k, v); updateFwd(); } });
         $('fwdu-' + k).addEventListener('blur', () => updateFwd());
@@ -7831,7 +7914,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     const t = S.tiles[idx];
     if (!t || !mineT(t) || !hasTroops(idx)) return;
     const ds = fwdTargets(idx);
-    ui.fwd = { from: idx, u: E.U(unitsAt(idx)), to: ds.length ? ds[0] : -1, stay: ui.stayKeep };
+    ui.fwd = { from: idx, u: lockedU(unitsAt(idx)), to: ds.length ? ds[0] : -1, stay: ui.stayKeep };
     ui.sheetSig = ''; ui.fwdSig = '';
     renderSheet();
     ensureVisible(idx);
@@ -7840,23 +7923,18 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   function renderUnitRows() {
     const su = fromU(), atk = attackMode();
     const ks = KEYS.filter(k => su[k] > 0 || ui.sendU[k] > 0 || (atk && E.unitUnlocked(S, me(), k)));
-    const sig = ui.sendFrom + ':' + ks.join(',');
+    const sig = ui.sendFrom + ':' + ks.join(',') + ':' + ks.filter(k => ui.lock0[k]).join(',');
     const box = $('urows');
     if (sig === ui.rowSig) return;
     ui.rowSig = sig;
     if (!ks.length) { box.innerHTML = '<p class="muted">' + (ui.sendFrom >= 0 ? TR('Inga trupper i ') + esc(rname(S.tiles[ui.sendFrom])) + TR(' just nu.') : TR('Du har inga trupper som kan skickas hit.')) + '</p>'; return; }
-    box.innerHTML = ks.map(k =>
-      '<div class="urow">' + icon(UNITS[k].icon, 'uic') + '<span class="un">' + UNITS[k].name + '<small id="have-' + k + '"></small></span>' +
-      '<div class="stepper sm"><button type="button" data-act="u-minus" data-unit="' + k + '" aria-label="' + TR('Färre ') + UNITS[k].many + '">−</button>' +
-      '<input id="sendu-' + k + '" type="number" inputmode="numeric" min="0" value="0" aria-label="' + TR('Antal ') + UNITS[k].many + '">' +
-      '<button type="button" data-act="u-plus" data-unit="' + k + '" aria-label="' + TR('Fler ') + UNITS[k].many + '">+</button></div>' +
-      '<button class="chip" type="button" data-act="u-all" data-unit="' + k + '" aria-label="' + TR('Alla ') + UNITS[k].many + '">' + TR('Alla') + '</button></div>').join('');
+    box.innerHTML = ks.map(k => unitRowHTML(k, 'u', 'sendu-' + k, 'have-' + k)).join('');
     ks.forEach(k => {
       $('sendu-' + k).addEventListener('input', e => { const v = parseInt(e.target.value, 10); if (v >= 0) { setSend(k, v); updateSheet(); } });
       $('sendu-' + k).addEventListener('blur', () => updateSheet());
     });
   }
-  function setSend(k, v) { ui.sendU[k] = clamp(v, 0, attackMode() ? 9999 : fromU()[k] || 0); }
+  function setSend(k, v) { ui.sendU[k] = ui.lock0[k] ? 0 : clamp(v, 0, attackMode() ? 9999 : fromU()[k] || 0); }
   // Väljaren för avsändaren.
   function updateFromSel() {
     const row = $('fromRow');
@@ -8871,7 +8949,9 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       case 'tal': ui.talSel = b.dataset.skill; renderSkills(true); break;
       case 'snneed': { const n = needs(ui.sel); if (n.need) ui.sendU = E.U(n.need); updateSheet(); break; }
       case 'snsafe': { const n = needs(ui.sel); if (n.safe) ui.sendU = E.U(n.safe); updateSheet(); break; }
-      case 'snall': ui.sendU = E.U(fromU()); updateSheet(); break;
+      case 'snall': ui.sendU = lockedU(fromU()); updateSheet(); break;
+      case 'u-none': setSend(b.dataset.unit, 0); updateSheet(); break;
+      case 'fu-none': fwdSet(b.dataset.unit, 0); updateFwd(); break;
       case 'snclear': ui.sendU = E.U(); updateSheet(); break;
       case 'send': {
         if (ui.sendFrom < 0) break;
@@ -9627,7 +9707,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       TR('Du kan <b>anfalla</b> en ruta som gränsar till en ruta du kontrollerar, från valfri ruta där du har trupper. Trupperna går aldrig fågelvägen utan alltid genom dina egna rutor: ') + D(hop) + TR(' per ruta på vägen och ') + D(atk) + TR(' för sista steget in i striden. Efter striden går de överlevande till närmaste ruta du kontrollerar, om du inte kryssar i att de ska stanna och försvara rutan.'),
       TR('<b>Fältslag</b>: anfaller två spelare varandra längs samma väg samtidigt möts arméerna på vägen och slåss där med anfallspoäng på båda sidor, utan murar, utposter eller grundförsvar. De som överlever fortsätter mot sitt mål.'),
       TR('<b>Förstärkning</b> kan skickas till vilken ruta du kontrollerar, så länge det finns en väg dit genom dina egna rutor. Den tar ') + D(hop) + TR(' per ruta på vägen. Är rutan inte din när trupperna kommer fram går de till närmaste ruta du kontrollerar.'),
-      TR('På <b>neutrala rutor</b> står neutrala soldater, högst ') + c.neutralCap + TR('. Nya dyker upp med ') + Math.round(c.spawnBaseChance * 100) + TR(' % chans var ') + D(pc * MIN) + TR(', och chansen ökar med ') + n1(c.spawnChancePerMinute * 100) + TR(' procentenheter varje gång. Medan ett anfall är på väg mot en neutral ruta dyker inga nya upp där. Varje neutral soldat du dödar ger <b>') + c.killReward + TR(' guld</b>.'),
+      TR('På <b>neutrala rutor</b> står neutrala soldater (banditer), högst ') + c.neutralCap + TR('. Rutorna bredvid varje by börjar med 1 eller 2, och alla spelare får lika många av varje. Efter de första ') + D((c.spawnGraceMinutes || 1) * pc * MIN) + TR(' dyker nya upp med ') + Math.round(c.spawnBaseChance * 100) + TR(' % chans var ') + D(pc * MIN) + TR(', och chansen ökar med ') + n1(c.spawnChancePerMinute * 100) + TR(' procentenheter varje gång. Medan ett anfall är på väg mot en neutral ruta dyker inga nya upp där. Varje neutral soldat du dödar ger <b>') + c.killReward + TR(' guld</b>.'),
       TR('När du har dödat alla på en ruta utan utpost är du den som tog den senast, men den är inte din förrän du bygger en <b>utpost</b> för ') + o.cost + TR(' guld. Du behöver inte ha trupper kvar där. Utposten ger ') + gold(o.goldPerLevel) + TR(' och +') + o.defPerLevel + TR(' i grundförsvar. Ränder på kartan betyder att någon tog rutan senast men inte har byggt en utpost.'),
       TR('Utposten kan byggas ut till nivå ') + o.maxLevel + TR(' (nivå L kostar ') + o.upgradeCost + TR(' × L guld): varje nivå ger ') + gold(o.goldPerLevel) + TR(' och +') + o.defPerLevel + TR(' i grundförsvar. En <b>mur</b> i utposten ger +') + Math.round(c.wall.bonusPerLevel * 100) + TR(' % i försvar per nivå, högst nivå ') + c.wall.max + TR('. Tar en motspelare rutan förstörs utposten och muren helt, och den som tog rutan får ') + Math.round(c.razeLoot * 100) + TR(' % av vad de kostat som byte.'),
       TR('Ett <b>utkikstorn</b> i en utpost (') + (c.tower || E.CONFIG.tower).costs.join('/') + TR(' guld för nivå 1/2) gör att du ser fiendens trupper två rutor bort från den rutan i stället för en. På nivå 2 kan du också anfalla rutorna två steg bort därifrån; anfallet går genom rutan emellan.'),
