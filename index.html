@@ -58,8 +58,8 @@ svg.ic { width: 20px; height: 20px; flex: none; }
   height: 100%;
   display: grid;
   grid-template-columns: 100%;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  grid-template-areas: "hud" "main" "tabs";
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas: "hud" "tut" "main" "tabs";
 }
 
 /* ---------- HUD ---------- */
@@ -755,8 +755,8 @@ details[open] summary { margin-bottom: 10px; }
 @media (min-width: 960px) {
   #app {
     grid-template-columns: 420px minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
-    grid-template-areas: "hud hud" "tabs map" "side map";
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-areas: "hud hud" "tut map" "tabs map" "side map";
   }
   .hud {
     grid-template-columns: auto minmax(0, 1fr) minmax(480px, 640px) auto auto;
@@ -1037,6 +1037,45 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .urow .chip:disabled, .urow .stepper button:disabled, .urow .stepper input:disabled { opacity: .4; cursor: default; }
 .urow .chip.none { padding: 5px 8px; }
 
+/* ---------- Tutorial ---------- */
+:root { --tut: #7ed6ff; }
+.tut { grid-area: tut; background: var(--slab-2); border-bottom: 1px solid var(--seam); border-left: 4px solid var(--tut); }
+.tut[hidden] { display: none; }
+.tut-top { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 8px 12px; background: none; border: 0; text-align: left; }
+.tut-step { font: 600 13px var(--f-num); letter-spacing: .04em; color: var(--tut); white-space: nowrap; }
+.tut-title { font-weight: 700; min-width: 0; }
+.tut-timer { font: 600 15px var(--f-num); color: var(--bad); white-space: nowrap; }
+.tut-chev { width: 16px; height: 16px; color: var(--ink-dim); transition: transform .2s; }
+.tut-top[aria-expanded="true"] .tut-chev { transform: rotate(45deg); }
+.tut-body { padding: 0 12px 10px; display: grid; gap: 7px; max-height: 38vh; overflow-y: auto; }
+.tut-body[hidden] { display: none; }
+.tut-text { margin: 0; color: var(--ink); font-size: 15px; line-height: 1.38; }
+.tut-text b { color: var(--tut); font-weight: 700; }
+.tut-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.tut-btns .btn { padding: 6px 14px; min-height: 0; }
+.tut-btns .btn[hidden] { display: none; }
+.tut-all summary { cursor: pointer; color: var(--ink-dim); font-size: 14px; }
+.tut-list { margin: 6px 0 0; padding-left: 22px; display: grid; gap: 2px; font-size: 14px; color: var(--ink-dim); }
+.tut-list li.done { color: var(--moss); }
+.tut-list li.done::marker { content: '✓  '; }
+.tut-list li.cur { color: var(--ink); font-weight: 700; }
+.tut-hl { position: relative; z-index: 2; outline: 3px solid var(--tut) !important; outline-offset: 2px; animation: tutPulse 1.1s ease-in-out infinite; }
+@keyframes tutPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(126, 214, 255, .7); } 50% { box-shadow: 0 0 0 7px rgba(126, 214, 255, 0); } }
+@media (prefers-reduced-motion: reduce) { .tut-hl { animation: none; } }
+.tut-levels { display: grid; gap: 8px; }
+.tut-level { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--r); background: var(--slab); border: 1px solid var(--seam); }
+.tut-level.next { border-color: var(--tut); }
+.tut-level .tl-n { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font: 700 16px var(--f-num); background: var(--slab-3); }
+.tut-level.done .tl-n { background: var(--moss); color: var(--ground); }
+.tut-level .tl-t { display: grid; min-width: 0; }
+.tut-level small { color: var(--ink-dim); }
+@media (min-width: 960px) { .tut { border-right: 1px solid var(--seam); } .tut-body { max-height: 46vh; } }
+.tut-level.quick { border-color: var(--gold); }
+.tut-level.quick .tl-n { color: var(--gold); }
+.tut-level.quick.done .tl-n { color: var(--ground); }
+#paneTut .eyebrow { margin: 4px 0 -6px; }
+.tut-level .tl-n svg { width: 18px; height: 18px; }
+
 </style>
 </head>
 <body>
@@ -1089,6 +1128,9 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     <symbol id="s-mine" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19.5L16.2 8.3"/><path d="M8.6 5.4c3.9-2 8-1.3 10 .6s2.6 6.1.6 10" stroke-width="2.4"/></g><circle cx="5.3" cy="19.2" r="1.3" fill="currentColor"/></symbol>
     <symbol id="s-loot" viewBox="0 0 24 24"><circle cx="10.5" cy="13.5" r="6.3" fill="#e6b443"/><circle cx="10.5" cy="13.5" r="4.2" fill="none" stroke="#a77b1f" stroke-width="1.3"/><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.5 3.5v6M15.5 6.5h6"/></g></symbol>
     <symbol id="s-build" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 10.5L5 19a1.6 1.6 0 01-2.2-2.2l8.5-8.5"/><path d="M10.6 7.6l3-3c1.5-1.5 4-1.6 5.6-.4l-2 1.5 2.6 2.6 1.5-2c1.2 1.6 1.1 4.1-.4 5.6l-3 3z"/></g></symbol>
+    <symbol id="s-bridge" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V3.5"/><path d="M6 4h9.5l-2.2 3 2.2 3H6"/><path d="M2.5 21h8.5"/></g><path d="M17.6 12.4l4 1.5v3c0 2.4-1.6 4.2-4 5-2.4-.8-4-2.6-4-5v-3z" fill="currentColor"/></symbol>
+    <symbol id="s-again" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 12a7.5 7.5 0 11-2.2-5.3"/><path d="M19.8 3.6v3.6h-3.6"/></g><path d="M9.6 16.6v-4.1a2.4 2.4 0 014.8 0v4.1z" fill="currentColor"/><path d="M8.2 16.8h7.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="s-leech" viewBox="0 0 24 24"><circle cx="8.5" cy="15.5" r="5" fill="#e6b443"/><circle cx="8.5" cy="15.5" r="3.2" fill="none" stroke="#a77b1f" stroke-width="1.2"/><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 11l7-7M14.5 4H20v5.5"/></g></symbol>
     <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4.5 19.5l1-4.2L15.6 5.2a1.9 1.9 0 012.7 0l.5.5a1.9 1.9 0 010 2.7L8.7 18.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M13.8 7l3.2 3.2" stroke="currentColor" stroke-width="1.8"/></symbol>
   </defs>
 </svg>
@@ -1129,6 +1171,18 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
       </button>
     </div>
   </header>
+
+  <section class="tut" id="tut" hidden aria-live="polite">
+    <button class="tut-top" type="button" data-act="tut-toggle" id="tutToggle" aria-expanded="true">
+      <span class="tut-step" id="tutStep"></span><b class="tut-title" id="tutTitle"></b><span class="tut-timer" id="tutTimer" hidden></span>
+      <svg class="ic tut-chev" aria-hidden="true"><use href="#i-plus"/></svg>
+    </button>
+    <div class="tut-body" id="tutBody">
+      <p class="tut-text" id="tutText"></p>
+      <div class="tut-btns"><button class="btn" type="button" data-act="tut-back" id="tutBack" hidden>Tillbaka</button><button class="btn" type="button" data-act="tut-show" id="tutShow">Visa mig</button><button class="btn primary" type="button" data-act="tut-ack" id="tutAck">OK, nästa</button></div>
+      <details class="tut-all"><summary id="tutAllSum">Alla uppdrag</summary><ol class="tut-list" id="tutList"></ol></details>
+    </div>
+  </section>
 
   <nav class="tabbar" role="tablist" aria-label="Vyer">
     <button class="tab" role="tab" data-tab="village" aria-selected="true"><svg><use href="#t-village"/></svg><span>Byn</span></button>
@@ -1202,11 +1256,22 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     <canvas class="preview" id="preview" width="540" height="240" aria-hidden="true"></canvas>
     <div class="stack">
       <h1 class="title">Guld &amp; Potatis</h1>
-      <div class="seg two" role="group" aria-label="Spelläge" id="modeSeg">
+      <div class="seg three" role="group" aria-label="Spelläge" id="modeSeg">
+        <button type="button" data-mode="tut" aria-pressed="false">Lär dig spela</button>
         <button type="button" data-mode="solo" aria-pressed="true">Spela ensam</button>
         <button type="button" data-mode="online" aria-pressed="false">Spela online</button>
       </div>
       <p class="lede">Bygg upp byn, träna soldater och ta rutorna runt omkring dig. Bygg utposter, försvara gränserna och ta rivalernas rutor. Varje ruta du har ger en vinstpoäng var tionde minut. Först till 100 vinner.</p>
+    </div>
+    <div class="mode-pane" id="paneTut" hidden>
+      <p class="hint">Snabbtutorialen visar hela spelet på ett par minuter. Tutorialbanorna lär dig spelet steg för steg: varje bana har en lista med uppdrag, och du börjar med ungefär det du byggt i banorna före.</p>
+      <div class="stack" id="tutCont" hidden>
+        <button class="btn primary wide" data-act="tut-continue" id="tutContBtn">Fortsätt</button>
+        <p class="hint" id="tutContInfo"></p>
+      </div>
+      <div class="tut-levels" id="tutQuick"></div>
+      <h3 class="eyebrow">Tutorialbanor</h3>
+      <div class="tut-levels" id="tutLevels"></div>
     </div>
     <div class="mode-pane" id="paneSolo">
       <div class="stack" id="continueBox" hidden>
@@ -1242,10 +1307,6 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
       </section>
       <section class="stack week-box" id="weekBox"></section>
     </div>
-    <details>
-      <summary>Så spelar du</summary>
-      <ul class="rules" id="rulesStart"></ul>
-    </details>
   </div>
 </div>
 
@@ -1359,6 +1420,14 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   </div>
 </div>
 
+<div class="overlay" id="ov-tut" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="tutDoneTitle">
+    <h2 class="title" id="tutDoneTitle"></h2>
+    <p class="lede" id="tutDoneText"></p>
+    <div class="row"><button class="btn" type="button" data-act="tut-quit">Till startskärmen</button><button class="btn primary" type="button" data-act="tut-next" id="tutNext">Nästa bana</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="ov-lost" hidden>
   <div class="card" role="dialog" aria-modal="true" aria-labelledby="lostTitle">
     <h2 class="h2" id="lostTitle">Frånkopplad</h2>
@@ -1446,7 +1515,7 @@ const Engine = (function () {
     researchCostFirst: 40,        // [antagande] nivå 1 kostar 40 guld ...
     researchCostGrowth: 1.5,      // ... och varje nivå × 1,5 ...
     researchCostGrowthHigh: 1.2,  // ... över nivå 10 × 1,2
-    researchMinutesPerLevel: 2,   // [antagande] nivå L tar L × 2 minuter
+    researchMinutesPerLevel: 1.4, // nivå L tar L × 1,4 minuter (30 % snabbare i version 39, tidigare 2)
     researchQueueMax: 5,          // [antagande] högst 5 förbättringar i verkstaden (pågående + kö)
     workshopSpeedFactor: 0.9,     // varje verkstadsnivå över 1 gör förbättringarna 10 % snabbare
     // Neutrala soldater: [antagande] 1–2 på rutorna närmast byarna, 2–4 längre bort.
@@ -1460,7 +1529,7 @@ const Engine = (function () {
     // sedan −2 procentenheter i minuten, lägst −50 %. Veckospelet: −1 procentenhet i timmen (week.hillDef).
     // Var femte ruta har en guldgruva: +2 guld i minuten till den som kontrollerar rutan. Med ekonomicentrum kan den
     // uppgraderas (t.mineLvl, följer rutan): +perLevel guld i minuten per nivå, upCost guld per nivå. [antagande: +2 per nivå]
-    regionMine: { chance: 0.2, goldPerMin: 2, perLevel: 2, upCost: 20 },
+    regionMine: { chance: 0.2, goldPerMin: 2, perLevel: 2, upCost: 10 },   // upCost 20 före version 39
     // Startbyar: 2 i grundförsvar, och muren i byn ger +8 % försvar per nivå. Vinner du plundrar du:
     // de överlevande bär hem guld motsvarande 5 × sitt grundanfall.
     village: { flat: 2, wallPerLevel: 0.08 },
@@ -1487,17 +1556,20 @@ const Engine = (function () {
     // poäng i samma träd (3 för tier 2, 6 för tier 3).
     tierPoints: 3,
     skills: {
-      atk:   { tree: 'attack',  tier: 1, max: 3, per: 0.06 },   // Blodtörst: +6 % anfallspoäng per nivå
+      atk:   { tree: 'attack',  tier: 1, max: 3, per: 0.08 },   // Blodtörst: +8 % anfallspoäng per nivå
       grim:  { tree: 'attack',  tier: 1, max: 3, per: 0.2 },    // Dödsångest: +20 % lik från dina stupade per nivå
       blitz: { tree: 'attack',  tier: 2, max: 3, per: 0.25 },   // Snabbfotad: anfallssteget går 25 % snabbare per nivå
+      bridge: { tree: 'attack', tier: 2, max: 3, sec: 30 },     // Brohuvud: en ruta du tar kan inte anfallas av andra spelare på 30 s per nivå
       vet:   { tree: 'attack',  tier: 3, max: 1, wall: 0.5 },   // Stridsduglig: anfall ignorerar utposternas grundförsvar och halva murbonusen
-      def:   { tree: 'defense', tier: 1, max: 3, per: 0.06 },   // Hårdhudad: +6 % försvarspoäng per nivå
+      def:   { tree: 'defense', tier: 1, max: 3, per: 0.08 },   // Hårdhudad: +8 % försvarspoäng per nivå
       wire:  { tree: 'defense', tier: 1, max: 3, flat: 1 },     // Järnspikar: +1 grundförsvar per nivå på alla dina rutor (byn inräknad)
       move:  { tree: 'defense', tier: 2, max: 3, per: 0.25 },   // En för alla, alla för en: förflyttningar 25 % snabbare per nivå
+      again: { tree: 'defense', tier: 2, max: 3, per: 0.3 },    // En gång till!: 0,3 lik per nivå för varje draug som dör när du försvarar dig
       dead:  { tree: 'defense', tier: 3, max: 1, def: 0.5 },    // Mur av döda: draugar +0,5 i försvar
-      eco:   { tree: 'economy', tier: 1, max: 3, per: 0.15 },   // Guldpost: utposterna ger +15 % guld per nivå
-      mine:  { tree: 'economy', tier: 1, max: 3, per: 0.05 },   // Gruvdrift: byns guldgruva ger +5 % per nivå
+      eco:   { tree: 'economy', tier: 1, max: 3, per: 0.10 },   // Guldpost: utposterna ger +10 % guld per nivå
+      mine:  { tree: 'economy', tier: 1, max: 3, per: 0.05 },   // Gruvdrift: alla dina guldgruvor (i byn och på kartan) ger +5 % per nivå
       loot:  { tree: 'economy', tier: 2, max: 3, gold: 2 },     // Som ny!: 2 guld per nivå för varje fientlig trupp du dödar
+      leech: { tree: 'economy', tier: 2, max: 3, per: 0.3 },    // Gruvtjuv: 30 % per nivå av guldet från andra spelares guldgruvor som gränsar till dina rutor
       build: { tree: 'economy', tier: 3, max: 1, per: 0.3 },    // Byggmästare: utposter och murar 30 % billigare
     },
     stepMs: 500,
@@ -2077,7 +2149,7 @@ const Engine = (function () {
     const plots = new Array(PLOTS).fill(null);
     plots[0] = 'goldmine';
     let i = 1;
-    for (const k of ['barracks', 'workshop', 'lab', 'treasury', 'crypt']) if (b[k] > 0 && i < PLOTS) plots[i++] = k;
+    for (const k of ['barracks', 'workshop', 'lab', 'treasury', 'crypt', 'econ']) if (b[k] > 0 && i < PLOTS) plots[i++] = k;
     return plots;
   }
   function give(target, k, n) {   // för tester och verktyg: ge trupper till en by
@@ -2089,6 +2161,7 @@ const Engine = (function () {
   // opts: { seed, villageName, rival: 'easy'|'normal'|'hard'|null, rivalCount, config, humans }
   function createGame(opts) {
     opts = opts || {};
+    if (opts.tutorial != null && opts.tutorial !== false) return tutorialGame(opts);
     const cfg = JSON.parse(JSON.stringify(opts.config || CONFIG));
     const seed = (opts.seed != null ? opts.seed : Math.floor(Math.random() * 2147483647)) | 0;
     const rival = opts.rival === undefined ? 'normal' : opts.rival;
@@ -2232,6 +2305,132 @@ const Engine = (function () {
     }
     return s;
   }
+  // =====================================================================
+  //   TUTORIAL: sju banor. Varje bana är ett vanligt spel med en egen uppsättning (byggnader, trupper, rutor,
+  //   fiender) som ungefär motsvarar vad spelaren gjort i banorna före. Uppdragen och skripten ligger i
+  //   gränssnittet (TUTS i ui.js); här finns bara startläget. s.tut = { level, done, ... } sparas med spelet.
+  //   Bottarna i bana 2–5 är passiva ('idle'): de gör ingenting.
+  // =====================================================================
+  const TUT_GAMES = {
+    0: { seed: 4010, rival: 'idle', rivalCount: 2 },   // snabbtutorialen: en färdig by att titta på
+    1: { seed: 4101, rival: null },
+    2: { seed: 4202, rival: 'idle', rivalCount: 2 },
+    3: { seed: 4303, rival: 'idle', rivalCount: 2 },
+    4: { seed: 4404, rival: 'idle', rivalCount: 2 },
+    5: { seed: 4505, rival: 'idle', rivalCount: 2 },
+    6: { rival: 'normal', rivalCount: 2, vpToWin: 50 },
+    7: { rival: 'hard', rivalCount: 2, vpToWin: 100 },
+  };
+  // Kortaste väg mellan två rutor över land (byar bara som start och mål). Hav och andra byar räknas inte.
+  function landPath(s, a, b) {
+    const prev = new Map([[a, -1]]), q = [a];
+    for (let h = 0; h < q.length; h++) {
+      const i = q[h];
+      if (i === b) break;
+      for (const j of s.tiles[i].adj) {
+        if (prev.has(j) || s.tiles[j].off || (s.tiles[j].type === 'village' && j !== b)) continue;
+        prev.set(j, i); q.push(j);
+      }
+    }
+    if (!prev.has(b)) return null;
+    const out = [];
+    for (let i = b; i !== -1; i = prev.get(i)) out.unshift(i);
+    return out;
+  }
+  function tutorialGame(opts) {
+    const n = opts.tutorial === 0 || opts.tutorial === 'quick' ? 0 : Math.max(1, Math.min(7, opts.tutorial | 0)), T = TUT_GAMES[n];
+    const s = createGame({ seed: T.seed != null ? T.seed : opts.seed, villageName: opts.villageName, avatar: opts.avatar, rival: T.rival, rivalCount: T.rivalCount, vpToWin: T.vpToWin });
+    const c = s.cfg, p = s.players.p1, v = p.village, tw = s.towns[v];
+    s.tut = { level: n, done: [] };
+    const land = i => s.tiles[i] && s.tiles[i].type === 'land' && !s.tiles[i].hill && !s.tiles[i].off;
+    const own = (i, pid, lvl, u) => { const t = s.tiles[i]; Object.assign(t, { owner: pid, occ: null, post: { lvl: lvl || 1, wall: 0, tower: 0 }, u: U(u || {}) }); syncTile(t); };
+    const bld = (town, b) => { Object.assign(town.buildings, b); town.plots = defaultPlots(town.buildings); };
+    const home = (town, u) => { town.hu = U(u); syncTown(town); };
+    const nb = i => s.tiles[i].adj.filter(land);
+    const towardHill = nb(v).sort((a, b) => hops(s, a, 0) - hops(s, b, 0) || a - b);   // grannar till byn, närmast kullen först
+    const p2 = s.players.p2, v2 = p2 && p2.village;
+    // Bana 1–2: inga nya banditer de första 15 minuterna (så att målet står kvar som det beskrivs).
+    if (n <= 2) s.nextSpawnAt = Math.max(s.nextSpawnAt, 15 * MINUTE);
+    if (n <= 3) c.soldierTrainSeconds = 20;
+    if (n === 1) {
+      // Rutan med 1 bandit som är första målet: grannen närmast kullen får 1.
+      const t = towardHill[0]; s.tiles[t].u = U({ soldier: 1 }); syncTile(s.tiles[t]); s.tut.target = t;
+    }
+    if (n >= 2 && n <= 5) {
+      // Det spelaren byggt i bana 1: guldgruvan 2, barrack och en utpost (nivå 2) på första rutan.
+      bld(tw, { goldmine: 2, barracks: 1 }); own(towardHill[0], 'p1', 2); home(tw, { soldier: 3 }); tw.gold = 250;
+      c.unlockMinutes = 0.5;
+      // De andra spelarna (passiva) har var sin ruta bredvid byn med två soldater, så att man ser dem på kartan.
+      for (const id of s.order.slice(1)) { const pv = s.players[id].village, t = nb(pv).find(i => !s.tiles[i].owner); if (t != null) own(t, id, 1, { soldier: 2 }); }
+    }
+    if (n >= 3 && n <= 5) {
+      // Det spelaren gjort i bana 2: forskningscentret och berserkers, fler rutor, större barrack och guldgruva.
+      bld(tw, { goldmine: 3, barracks: 2, lab: 1 }); tw.unlocked.berserker = true;
+      home(tw, { soldier: 3, berserker: 4 }); tw.gold = 300;
+      for (const i of nb(v).slice(0, 3)) if (!s.tiles[i].owner) own(i, 'p1', 1);
+    }
+    if (n === 3 || n === 4) {
+      // Vägen mot kullen: alla rutor dit utom kullen själv är spelarens.
+      const path = landPath(s, v, 0) || [v, 0];
+      for (const i of path.slice(1, -1)) own(i, 'p1', 1);
+      s.tut.path = path;
+    }
+    if (n === 3) {
+      // En annan spelares guldgruva bredvid spelarens rutor (4 soldater och en utpost), och kullen med 6 banditer.
+      const mine = s.tiles.map(t => t.id).filter(i => land(i) && !s.tiles[i].owner && !s.tiles[i].adj.includes(v) && !s.tiles[i].adj.includes(0) &&
+        s.tiles[i].adj.some(j => s.tiles[j].owner === 'p1')).sort((a, b) => hops(s, a, v2) - hops(s, b, v2) || a - b)[0];
+      own(mine, 'p2', 1, { soldier: 4 }); s.tiles[mine].mine = true; s.tut.mine = mine;
+    }
+    if (n === 4) {
+      // Spelaren håller kullen. En annan spelare samlar trupper bredvid kullen och anfaller efter 20 minuter.
+      bld(tw, { goldmine: 3, barracks: 2, lab: 1 }); home(tw, { soldier: 3, berserker: 12 }); tw.gold = 750;
+      const H = s.tiles[0]; Object.assign(H, { owner: 'p1', occ: null, post: null, held: 0, u: U({ soldier: 4 }) }); syncTile(H);
+      const stage = H.adj.filter(i => land(i) && !s.tiles[i].owner).sort((a, b) => hops(s, a, v2) - hops(s, b, v2) || a - b)[0];
+      own(stage, 'p2', 1, { berserker: 10, soldier: 7 }); s.tut.stage = stage; s.tut.attackAt = 20 * MINUTE;
+      c.researchMinutesPerLevel = 0.4; c.soldierTrainSeconds = 30;
+    }
+    if (n === 5) {
+      // Det spelaren gjort i bana 3–4: verkstad, sköldgrabbar, större barrack. Vägen fram till en annan spelares by.
+      bld(tw, { goldmine: 4, barracks: 3, lab: 2, workshop: 2, treasury: 1 }); tw.unlocked.shield = true;
+      p.up.defense = 2; p.up.shield = 2; home(tw, { berserker: 12, shield: 10 }); tw.gold = 450;
+      const path = landPath(s, v, v2) || [v, v2];
+      for (const i of path.slice(1, -1)) own(i, 'p1', 1);
+      s.tut.stage = path[path.length - 2]; s.tut.enemy = v2;
+      const t2 = s.towns[v2]; bld(t2, { goldmine: 4, barracks: 5, workshop: 4, lab: 2, treasury: 3, wall: 1 }); home(t2, { soldier: 6 }); t2.gold = 400;
+      c.soldierTrainSeconds = 25;
+    }
+    if (n === 0) {
+      // Snabbtutorialen: en by som är en bit in i spelet, med alla byggnader, rutor med utposter, en guldgruva,
+      // en ockuperad ruta och två riktiga rapporter (ett anfall och ett försvar). Inget behöver göras.
+      bld(tw, { goldmine: 4, barracks: 3, lab: 3, workshop: 3, treasury: 2, econ: 1, crypt: 1, wall: 2 });
+      Object.assign(tw.unlocked, { berserker: true, shield: true, siege: true });
+      p.up.attack = 1; p.up.defense = 1; p.corpses = 3; p.level = 3; p.points = 1; p.skills.atk = 1; p.skills.eco = 1;
+      home(tw, { soldier: 8, berserker: 8, shield: 4, siege: 2, draug: 2 }); tw.gold = 420;
+      const near = nb(v).sort((a, b) => hops(s, a, 0) - hops(s, b, 0) || a - b);
+      near.forEach((i, k) => { if (!s.tiles[i].owner) own(i, 'p1', k === 0 ? 3 : k === 1 ? 2 : 1, k === 0 ? { shield: 4, soldier: 2 } : { soldier: 1 }); });
+      const first = s.tiles[near[0]]; first.post.wall = 1; first.post.tower = 1;
+      // Gränsen: en egen ruta med sköldgrabbar mot en ruta som den passiva grannen p2 äger.
+      const mineT = i => s.tiles[i].owner === 'p1';
+      let front = -1, foe = -1;
+      for (const i of s.tiles.map(t => t.id).filter(i => land(i) && !s.tiles[i].owner && s.tiles[i].adj.some(mineT)).sort((a, b) => hops(s, a, v2) - hops(s, b, v2) || a - b)) {
+        const f2 = s.tiles[i].adj.find(j => land(j) && !s.tiles[j].owner && !s.tiles[j].adj.includes(v) && j !== 0);
+        if (f2 != null) { front = i; foe = f2; break; }
+      }
+      if (front >= 0) { own(front, 'p1', 2, { shield: 6, soldier: 2 }); own(foe, 'p2', 1, { berserker: 5 }); }
+      // En guldgruva på en egen ruta.
+      let mine = s.tiles.findIndex(t => t.mine && land(t.id) && !t.owner && t.adj.some(mineT));
+      if (mine < 0) { mine = s.tiles.map(t => t.id).filter(i => land(i) && !s.tiles[i].owner && !s.tiles[i].adj.includes(v) && s.tiles[i].adj.some(mineT))[0]; if (mine != null) s.tiles[mine].mine = true; }
+      if (mine != null && mine >= 0) own(mine, 'p1', 1, { soldier: 1 });
+      // Ett anfall på en neutral ruta (blir ockuperad) och p2:s anfall mot gränsen (förlorat): två riktiga rapporter.
+      const occ = s.tiles.map(t => t.id).filter(i => land(i) && !s.tiles[i].owner && s.tiles[i].adj.some(mineT) && i !== foe).sort((a, b) => hops(s, a, v) - hops(s, b, v) || a - b)[0];
+      if (occ != null) { s.tiles[occ].u = U({ soldier: 2 }); syncTile(s.tiles[occ]); apply(s, { player: 'p1', type: 'send', from: v, to: occ, units: { soldier: 5 } }); }
+      if (front >= 0) apply(s, { player: 'p2', type: 'send', from: foe, to: front, units: { berserker: 5 } });
+      for (let k = 0; k < 600 && s.armies.length; k++) step(s);
+      s.tut.occ = occ; s.tut.mine = mine; s.tut.front = front; s.tut.enemy = v2;
+      s.nextSpawnAt = Math.max(s.nextSpawnAt, s.time + 15 * MINUTE);
+    }
+    return s;
+  }
   // Veckospelet: en ny bot på en ledig byplats (den med mest ledigt runt sig om ingen anges).
   // Den får samma guldbonus som en ny spelare: +joinBonusPerDay för varje hel dag sedan start.
   // Basen (veckospelet): de innersta varven av rutor, som alltid finns även när byplatsen inte har någon spelare.
@@ -2359,16 +2558,28 @@ const Engine = (function () {
     for (const t of s.tiles) if (t.owner === p.id && t.post) lv += t.post.lvl;
     return lv * postLevelGph(s, p);
   }
-  // Guldgruvor på rutor: guld per timme för en gruva på nivå L (0 = inte uppgraderad).
-  function regionMineGph(s, L) { const m = s.cfg.regionMine; return m ? (m.goldPerMin + (m.perLevel || 0) * (L || 0)) * 60 / paceOf(s) : 0; }
+  // Guldgruvor på rutor: guld per timme för en gruva på nivå L (0 = inte uppgraderad), med p:s Gruvdrift.
+  function regionMineGph(s, L, p) { const m = s.cfg.regionMine; return m ? (m.goldPerMin + (m.perLevel || 0) * (L || 0)) * 60 / paceOf(s) * (1 + s.cfg.skills.mine.per * skillLv(p, 'mine')) : 0; }
   function mineGoldPerHour(s, p) {
     let g = 0;
-    for (const t of s.tiles) if (t.mine && t.owner === p.id) g += regionMineGph(s, t.mineLvl);
+    for (const t of s.tiles) if (t.mine && t.owner === p.id) g += regionMineGph(s, t.mineLvl, p);
+    return g;
+  }
+  // Gruvtjuv: en del av guldet från en annan spelares guldgruva (ruta i) som gränsar till en ruta p kontrollerar. Ägaren förlorar inget.
+  function leechAt(s, p, i) {
+    const L = skillLv(p, 'leech'), t = s.tiles[i];
+    if (!L || !t || !t.mine || !t.owner || t.owner === p.id || !t.adj.some(j => s.tiles[j].owner === p.id)) return 0;
+    return regionMineGph(s, t.mineLvl, s.players[t.owner]) * s.cfg.skills.leech.per * L;
+  }
+  function leechGph(s, p) {
+    if (!skillLv(p, 'leech')) return 0;
+    let g = 0;
+    for (const t of s.tiles) if (t.mine) g += leechAt(s, p, t.id);
     return g;
   }
   function goldPerHour(s, tw) {
     const p = s.players[tw.owner];
-    return (villageMineGph(s, p, tw.buildings.goldmine) + outpostGoldPerHour(s, p) + mineGoldPerHour(s, p)) * goldMul(s, p);
+    return (villageMineGph(s, p, tw.buildings.goldmine) + outpostGoldPerHour(s, p) + mineGoldPerHour(s, p) + leechGph(s, p)) * goldMul(s, p);
   }
   // Hur lång tid (ms speltid) en investering tar att betala sig: kostnad / ökningen i guld per timme.
   function roiMs(s, p, cost, gph) { const g = gph * goldMul(s, p); return g > 0 ? cost / g * HOUR : Infinity; }
@@ -2400,10 +2611,14 @@ const Engine = (function () {
     return L < 1 ? Infinity : Math.round(c.trainSeconds * 1000 * paceFor(s, 'train') * Math.pow(c.speedFactor, L - 1));
   }
   // Lik: en per stupad trupp (draugar ger inga), +20 % per nivå i Dödsångest. Delar av lik sparas tills de blir hela.
-  function addCorpses(s, p, lossU) {
-    if (!p || !lossU) return;
+  // En gång till!: draugar som dör när p försvarar sig ger 0,3 lik per nivå. Returnerar de liken (till rapporten).
+  function addCorpses(s, p, lossU, defending) {
+    if (!p || !lossU) return 0;
     const n = total(lossU) - (lossU.draug || 0);
     if (n > 0) p.corpses = Math.round(((p.corpses || 0) + n * (1 + s.cfg.skills.grim.per * skillLv(p, 'grim'))) * 100) / 100;
+    const L = defending ? skillLv(p, 'again') : 0, back = L && lossU.draug ? Math.round(lossU.draug * s.cfg.skills.again.per * L * 100) / 100 : 0;
+    if (back) p.corpses = Math.round(((p.corpses || 0) + back) * 100) / 100;
+    return back;
   }
   // Som ny!: guld för varje fientlig trupp (en annan spelares) som p dödar. Läggs i byn upp till förrådets tak.
   function killBounty(s, p, n) {
@@ -2483,6 +2698,7 @@ const Engine = (function () {
     return round2(powerM(s.cfg, defendersAt(s, i), 'def', d.mul) + d.flat);
   }
   // Immunitet (veckospelet): den som går med sent kan varken anfallas eller anfalla andra spelare i början.
+  const safeAt = (s, t) => !!(t && t.safeUntil && s.time < t.safeUntil);   // Brohuvud
   function immune(s, pid) { const p = s.players[pid]; return !!(p && p.immuneUntil && s.time < p.immuneUntil); }
   // Plundring: de överlevande bär guld motsvarande plunderFactor × sitt grundanfall.
   function carryCapacity(s, u) { return Math.floor(powerC(s.cfg, u, 'atk') * (s.cfg.plunderFactor || 3) + 1e-9); }
@@ -2724,6 +2940,7 @@ const Engine = (function () {
     if (tt.type === 'village' && !tt.owner) return 'Ingen bor här än.';
     if (!tt.adj.some(i => s.tiles[i].owner === pid) && !towerNear(s, pid, to, 2)) return 'Du kan bara anfalla en ruta som gränsar till en ruta du kontrollerar (eller två rutor från ett utkikstorn nivå 2).';
     const other = tt.owner || tt.occ;
+    if (other && other !== pid && safeAt(s, tt)) return 'Rutan är skyddad av Brohuvud en stund till.';
     if (other && other !== pid) {
       if (immune(s, other)) return 'Spelaren är immun en stund till.';
       if (immune(s, pid)) return 'Du kan inte anfalla andra spelare medan du är immun.';
@@ -3021,7 +3238,7 @@ const Engine = (function () {
 
     for (const id of s.order) {
       const p = s.players[id];
-      if (p.bot && s.time >= p.nextThink) {
+      if (p.bot && p.bot !== 'idle' && s.time >= p.nextThink) {   // 'idle' = passiv bot (tutorialbanorna)
         botThink(s, p);
         p.nextThink = s.time + Math.round((cfg.rivals[p.bot] || cfg.rivals.normal).thinkSeconds * 1000 * paceOf(s) * (0.7 + 0.6 * rand(s)));
       }
@@ -3173,6 +3390,13 @@ const Engine = (function () {
       return;
     }
     if (t.type === 'village') { villageRaid(s, a, t, p); return; }
+    // Rutan skyddas av Brohuvud: anfallet vänder utan strid.
+    const holder = t.owner || t.occ;
+    if (holder && holder !== p.id && safeAt(s, t)) {
+      const back = retreat(s, p, a.to, a.u, a.loot, a.from, holder);
+      log(s, { kind: 'bounce', player: p.id, defender: holder, tile: a.to, n: a.count, back, until: t.safeUntil });
+      return;
+    }
     // Anfall.
     const defender = t.owner || t.occ || null, dp = defender ? s.players[defender] : null;
     const A = a.count, D = t.troops, aU0 = U(a.u), dU0 = U(t.u);
@@ -3182,7 +3406,7 @@ const Engine = (function () {
       : { aPow: round2(powerM(cfg, a.u, 'atk', aMul)), dPow: 0, aLoss: 0, dLoss: 0, aLossU: U(), dLossU: U() };
     subFrom(t.u, r.dLossU); syncTile(t);
     const survU = subFrom(U(a.u), r.aLossU), survivors = total(survU);
-    addCorpses(s, p, r.aLossU); addCorpses(s, dp, r.dLossU);
+    addCorpses(s, p, r.aLossU); const revD = addCorpses(s, dp, r.dLossU, true);
     // Guld för dödade neutrala soldater hamnar i anfallarens by.
     const homeTown = s.towns[p.village];
     const loot = defender === null ? r.dLoss * cfg.killReward : 0;
@@ -3200,7 +3424,7 @@ const Engine = (function () {
     const expD = dp ? r.aLoss * cfg.expPerPlayerKill : 0;
     // Som ny!: guld för dödade fiendetrupper (inte neutrala).
     const bountyA = dp ? killBounty(s, p, r.dLoss) : 0, bountyD = dp ? killBounty(s, dp, r.aLoss) : 0;
-    let captured = false, occupied = false, postLvl = null, wallLvl = 0, razeLoot = 0, razeKept = 0, stay = 0, back = -1;
+    let captured = false, occupied = false, postLvl = null, wallLvl = 0, razeLoot = 0, razeKept = 0, stay = 0, back = -1, safe = 0;
     if (t.troops === 0 && survivors > 0) {
       // Vunnet. Du är den som senast tog rutan och kan bygga en egen utpost där. Hade en motspelare
       // en utpost (och mur) där förstörs den, och du får hälften av vad den kostat som byte.
@@ -3220,12 +3444,15 @@ const Engine = (function () {
       t.owner = null; t.occ = p.id; p.stats.occupied++; delete t.held;
       // Kullen har ingen utpost: den som vinner där kontrollerar den direkt.
       if (t.hill) { t.owner = p.id; t.occ = null; t.held = s.time; }
+      // Brohuvud: andra spelare kan inte anfalla rutan en stund (anfall som redan är på väg vänder).
+      const br = skillLv(p, 'bridge');
+      if (br) { t.safeUntil = s.time + Math.round(br * cfg.skills.bridge.sec * 1000 * paceOf(s)); safe = t.safeUntil - s.time; } else delete t.safeUntil;
       if (a.stay) { t.u = U(survU); syncTile(t); stay = survivors; }
       else { t.u = U(); syncTile(t); back = retreat(s, p, a.to, survU, null, a.from, dp ? dp.id : null); }
     }
     log(s, { kind: 'battle', player: p.id, defender, tile: a.to, from: a.from, A, D,
       aU: aU0, dU: dU0, aLossU: r.aLossU, dLossU: r.dLossU, aPow: r.aPow, dPow: r.dPow, aLoss: r.aLoss, dLoss: r.dLoss,
-      loot, lootKept, captured, occupied, postLvl, wallLvl, razeLoot, razeKept, survivors, stay, back, hill: !!t.hill, flat: def.flat, expA, expD, bountyA, bountyD });
+      loot, lootKept, captured, occupied, postLvl, wallLvl, razeLoot, razeKept, survivors, stay, back, hill: !!t.hill, flat: def.flat, expA, expD, bountyA, bountyD, revD, safe });
     gainExp(s, p, expA);
     gainExp(s, dp, expD);
   }
@@ -3240,7 +3467,7 @@ const Engine = (function () {
     const r = battleUnits(s, a.u, dU, aMul, def.mul, def.flat);
     subFrom(tw.hu, r.dLossU); syncTown(tw);
     const survU = subFrom(U(a.u), r.aLossU), survivors = total(survU);
-    addCorpses(s, p, r.aLossU); addCorpses(s, dp, r.dLossU);
+    addCorpses(s, p, r.aLossU); const revD = addCorpses(s, dp, r.dLossU, true);
     let plunder = { gold: 0 }, won = false;
     if (survivors > 0 && total(tw.hu) === 0) {
       won = true;
@@ -3260,7 +3487,7 @@ const Engine = (function () {
     const expA = r.dLoss * cfg.expPerPlayerKill, expD = r.aLoss * cfg.expPerPlayerKill;
     const bountyA = killBounty(s, p, r.dLoss), bountyD = killBounty(s, dp, r.aLoss);
     log(s, { kind: 'raid', player: p.id, defender: tw.owner, tile: a.to, from: a.from, A, D, aU: aU0, dU, aLossU: r.aLossU, dLossU: r.dLossU,
-      aPow: r.aPow, dPow: r.dPow, aLoss: r.aLoss, dLoss: r.dLoss, survivors, won, plunder, siege, back, flat: def.flat, wall: tw.buildings.wall || 0, expA, expD, bountyA, bountyD });
+      aPow: r.aPow, dPow: r.dPow, aLoss: r.aLoss, dLoss: r.dLoss, survivors, won, plunder, siege, back, flat: def.flat, wall: tw.buildings.wall || 0, expA, expD, bountyA, bountyD, revD });
     gainExp(s, p, expA);
     gainExp(s, dp, expD);
   }
@@ -3319,7 +3546,7 @@ const Engine = (function () {
 
     // 0. Färdighetspoäng
     // Färdigheter i prioritetsordning (den första som går att lära tas). Bottarna använder inte draugar (grim, dead).
-    const skillPlan = ['eco', 'atk', 'eco', 'atk', 'eco', 'atk', 'blitz', 'mine', 'def', 'mine', 'def', 'mine', 'build', 'def', 'loot', 'blitz', 'wire', 'loot', 'blitz', 'wire', 'loot', 'wire', 'vet', 'move', 'move', 'move'];
+    const skillPlan = ['eco', 'atk', 'eco', 'atk', 'eco', 'atk', 'blitz', 'mine', 'def', 'mine', 'def', 'mine', 'build', 'def', 'loot', 'leech', 'blitz', 'wire', 'loot', 'bridge', 'leech', 'blitz', 'wire', 'loot', 'leech', 'bridge', 'wire', 'vet', 'bridge', 'move', 'move', 'move'];
     while (p.points > 0) {
       const k = skillPlan.find(x => !skillBlock(s, p, x));
       if (!k || !act({ type: 'skill', skill: k }).ok) break;
@@ -3720,7 +3947,14 @@ const Engine = (function () {
 
   // Gamla sparningar migreras inte: isValidSave godtar bara VERSION, och en äldre sparning gör att man börjar om.
   // migrate finns kvar som krok om en migrering någon gång behövs.
-  function migrate(s) { return s; }
+  // Gamla sparningar: färdigheter som lagts till sedan dess (nivå 0).
+  function migrate(s) {
+    if (s && s.cfg && s.cfg.skills) {
+      for (const k in CONFIG.skills) if (!s.cfg.skills[k]) s.cfg.skills[k] = Object.assign({}, CONFIG.skills[k]);
+      for (const id in s.players || {}) { const p = s.players[id]; if (p.skills) for (const k in s.cfg.skills) if (p.skills[k] == null) p.skills[k] = 0; }
+    }
+    return s;
+  }
   function isValidSave(s) {
     return !!(s && s.v === VERSION && s.cfg && s.map && Array.isArray(s.tiles) && s.tiles.length === s.map.n && s.towns && s.players && s.order);
   }
@@ -3744,7 +3978,7 @@ const Engine = (function () {
   function encodeView(s, pid, logFrom, max) {
     const num = id => id ? s.order.indexOf(id) + 1 : 0;
     // Dimma: vem som äger en ruta syns alltid, men trupperna bara på rutor som gränsar till spelarens.
-    const tl = s.tiles.map((t, i) => [num(t.owner), num(t.occ), canSee(s, pid, i) ? uArr(defendersAt(s, i)) : 0, t.post ? [t.post.lvl, t.post.wall, t.post.tower || 0] : 0, t.type === 'village' ? 1 : 0, t.held != null ? t.held : null, t.mineLvl || 0]);
+    const tl = s.tiles.map((t, i) => [num(t.owner), num(t.occ), canSee(s, pid, i) ? uArr(defendersAt(s, i)) : 0, t.post ? [t.post.lvl, t.post.wall, t.post.tower || 0] : 0, t.type === 'village' ? 1 : 0, t.held != null ? t.held : null, t.mineLvl || 0, safeAt(s, t) ? t.safeUntil : 0]);
     const tw = [];
     for (const k in s.towns) {
       const x = s.towns[k];
@@ -3784,6 +4018,7 @@ const Engine = (function () {
       if (r[3]) t.post = { lvl: r[3][0], wall: r[3][1], tower: r[3][2] || 0 };
       if (r[5] != null) t.held = r[5];
       if (r[6]) t.mineLvl = r[6];
+      if (r[7]) t.safeUntil = r[7];
     });
     for (const x of v.tw) {
       if (x.buildings) { s.towns[x.idx] = x; continue; }
@@ -3806,9 +4041,9 @@ const Engine = (function () {
   return {
     CONFIG, VERSION, MINUTE, HOUR, UNIT_KEYS, ATK, DEF,
     initFor, encodeView, decodeView, logRelevant,
-    createGame, apply, step, advance, isValidSave, migrate, botThink, atMax,
+    createGame, apply, step, advance, isValidSave, migrate, botThink, atMax, landPath,
     hillDef, hillStepMs, VIS_BLD, nearestOwn, armyVisible,
-    genMapRound, roundRegionCount, postValue, roiMs, goldMul, villageMineGph, postLevelGph, regionMineGph, tierNeed, defensePoints, immune, carryCapacity, plunderOf, addWeekBot, freeSlots, joinBonus, buildMs, buildPending, unlockMs, mineGoldPerHour, activateSlot, DAY, U, total, addTo, subFrom, pick, give, armyUnits, townUnits, visibleTroops, defendersAt, canSee, isMine, PLOTS,
+    genMapRound, roundRegionCount, postValue, roiMs, goldMul, villageMineGph, postLevelGph, regionMineGph, leechAt, leechGph, safeAt, tierNeed, defensePoints, immune, carryCapacity, plunderOf, addWeekBot, freeSlots, joinBonus, buildMs, buildPending, unlockMs, mineGoldPerHour, activateSlot, DAY, U, total, addTo, subFrom, pick, give, armyUnits, townUnits, visibleTroops, defendersAt, canSee, isMine, PLOTS,
     town, townsOf, mapGrid, hops, adjacent, attackBlock, attackSources, srcUnits, sendMs, attackMs, hopMs, moveMs, route, plan,
     battleUnits, fillAttack, needSoldiers, armyPos, tileDefense, postDef, wallBonus, wireBonus, postUpCost, postWallCost,
     upgradeCost, goldCap, prodAtLevel, goldPerMinAt, goldPerHour, outpostGoldPerHour, draugMs, towerNear,
@@ -4581,7 +4816,6 @@ window.GP_EN = {
 " i försvar (": " defence (",
 "Guldpost": "Gold Post",
 "Gruvdrift": "Mining",
-"Guldgruvan i byn ger ": "The village gold mine gives ",
 "Som ny!": "Good as New!",
 "Du får ": "You get ",
 " för varje fientlig trupp du dödar, när du anfaller och när du försvarar dig.": " for every enemy troop you kill, when attacking and when defending.",
@@ -4602,7 +4836,6 @@ window.GP_EN = {
 " guld att träna. Vinner ett anfall mot en by sänks byns högsta byggnad (slumpas bland de högsta) en nivå för varje siegeman som överlever, och du får halva kostnaden för nivåerna i guld. Ett anfall med siegemen mot en by går i halv fart.": " gold to train. If an attack on a village wins, the village's highest building (random among the highest) is lowered one level for each siegeman that survives, and you get half the cost of those levels in gold. An attack with siegemen on a village moves at half speed.",
 "<b>Färdigheter</b>: tre träd (anfall, försvar och ekonomi) med tre nivåer. Nivå 2 i ett träd kräver ": "<b>Skills</b>: three trees (attack, defence and economy) with three tiers. Tier 2 in a tree requires ",
 " poäng i trädet och nivå 3 ": " points in the tree and tier 3 ",
-". Anfall: <b>Blodtörst</b> (+6 % anfall per nivå), <b>Dödsångest</b> (+20 % lik per nivå), <b>Snabbfotad</b> (anfall 25 % snabbare per nivå) och <b>Stridsduglig</b> (dina anfall ignorerar utposternas grundförsvar och halva murbonusen). Försvar: <b>Hårdhudad</b> (+6 % försvar per nivå), <b>Järnspikar</b> (+1 grundförsvar per nivå på alla dina rutor), <b>En för alla, alla för en</b> (förflyttningar 25 % snabbare per nivå) och <b>Mur av döda</b> (draugar +0,5 i försvar). Ekonomi: <b>Guldpost</b> (utposterna +15 % guld per nivå), <b>Gruvdrift</b> (byns guldgruva +5 % per nivå), <b>Som ny!</b> (2 guld per nivå för varje fientlig trupp du dödar) och <b>Byggmästare</b> (utposter och murar ": ". Attack: <b>Bloodlust</b> (+6% attack per level), <b>Death Dread</b> (+20% corpses per level), <b>Swiftfoot</b> (attacks 25% faster per level) and <b>Battle-hardened</b> (your attacks ignore outposts' base defence and half the wall bonus). Defence: <b>Thick Skin</b> (+6% defence per level), <b>Iron Spikes</b> (+1 base defence per level on all your territories), <b>All for One, One for All</b> (moves 25% faster per level) and <b>Wall of the Dead</b> (draugar +0.5 defence). Economy: <b>Gold Post</b> (outposts +15% gold per level), <b>Mining</b> (village gold mine +5% per level), <b>Good as New!</b> (2 gold per level for every enemy troop you kill) and <b>Master Builder</b> (outposts and walls ",
 " % billigare).": "% cheaper).",
 "Det finns ingen guldgruva här.": "There is no gold mine here.",
 "Rutan är inte din.": "The territory is not yours.",
@@ -4640,7 +4873,42 @@ window.GP_EN = {
 ". Rutorna bredvid varje by börjar med 1 eller 2, och alla spelare får lika många av varje. Efter de första ": ". The territories next to each village start with 1 or 2, and every player gets the same number of each. After the first ",
 " dyker nya upp med ": " new ones appear with ",
 "Lås till 0": "Lock to 0",
-"Inga ": "No "
+"Inga ": "No ",
+"Alla dina guldgruvor, i byn och på kartan, ger ": "All your gold mines, in the village and on the map, give ",
+". Anfall: <b>Blodtörst</b> (+": ". Attack: <b>Bloodlust</b> (+",
+" % anfall per nivå), <b>Dödsångest</b> (+": "% attack per level), <b>Death Dread</b> (+",
+" % lik per nivå), <b>Snabbfotad</b> (anfall ": "% corpses per level), <b>Swiftfoot</b> (attacks ",
+" % försvar per nivå), <b>Järnspikar</b> (+1 grundförsvar per nivå på alla dina rutor), <b>En för alla, alla för en</b> (förflyttningar ": "% defence per level), <b>Iron Spikes</b> (+1 base defence per level on all your territories), <b>All for One, One for All</b> (moves ",
+" % guld per nivå), <b>Gruvdrift</b> (alla dina guldgruvor, i byn och på kartan, +": "% gold per level), <b>Mining</b> (all your gold mines, in the village and on the map, +",
+"Passiv": "Passive",
+" från Gruvtjuv": " from Mine Thief",
+"Gruvtjuv": "Mine Thief",
+"du får <b>+": "you get <b>+",
+"</b> härifrån.": "</b> from here.",
+"Brohuvud: andra spelare kan inte anfalla rutan än.": "Bridgehead: other players cannot attack this territory yet.",
+"Brohuvud": "Bridgehead",
+"En ruta du tar kan inte anfallas av andra spelare under ": "A territory you take cannot be attacked by other players for ",
+". Anfall som redan är på väg dit vänder utan strid. Rutan får en sköld på kartan så länge skyddet varar.": ". Attacks already on their way turn back without a battle. The territory shows a shield on the map while the protection lasts.",
+"En gång till!": "One more time!",
+"För varje draug som dör när du försvarar dig får du tillbaka ": "For each draug that dies while you defend, you get back ",
+" lik": " corpses",
+" i kryptan.": " in the crypt.",
+"Gränsar en av dina rutor till en annan spelares guldgruva får du ": "If one of your territories borders another player’s gold mine, you get ",
+" av gruvans guld. Ägaren förlorar inget.": " of the mine’s gold. The owner loses nothing.",
+" lik</b> (En gång till!). ": " corpses</b> (One more time!). ",
+"Brohuvud: andra spelare kan inte anfalla rutan på ": "Bridgehead: other players cannot attack the territory for ",
+"Ditt anfall mot ": "Your attack on ",
+" vände: rutan skyddades av Brohuvud. ": " turned back: the territory was protected by Bridgehead. ",
+" går tillbaka.": " head back.",
+"s anfall mot ": "’s attack on ",
+" vände utan strid tack vare Brohuvud.": " turned back without a battle thanks to Bridgehead.",
+" % snabbare per nivå), <b>Brohuvud</b> (en ruta du tar kan inte anfallas av andra spelare på ": " % faster per level), <b>Bridgehead</b> (a territory you take cannot be attacked by other players for ",
+" per nivå) och <b>Stridsduglig</b> (dina anfall ignorerar utposternas grundförsvar och halva murbonusen). Försvar: <b>Hårdhudad</b> (+": " per level) and <b>Battle-hardened</b> (your attacks ignore outposts’ base defence and half the wall bonus). Defence: <b>Thick Skin</b> (+",
+" % snabbare per nivå), <b>En gång till!</b> (": " % faster per level), <b>One more time!</b> (",
+" lik per nivå för varje draug som dör när du försvarar dig) och <b>Mur av döda</b> (draugar +0,5 i försvar). Ekonomi: <b>Guldpost</b> (utposterna +": " corpses per level for each draug that dies while you defend) and <b>Wall of the Dead</b> (draugs +0.5 defence). Economy: <b>Gold Post</b> (outposts +",
+" % per nivå), <b>Som ny!</b> (2 guld per nivå för varje fientlig trupp du dödar), <b>Gruvtjuv</b> (": " % per level), <b>Good as New!</b> (2 gold per level for each enemy troop you kill), <b>Mine Thief</b> (",
+" % per nivå av guldet från andra spelares guldgruvor som gränsar till dina rutor) och <b>Byggmästare</b> (utposter och murar ": " % per level of the gold from other players’ gold mines bordering your territories) and <b>Master builder</b> (outposts and walls ",
+"Rutan är skyddad av Brohuvud en stund till.": "This territory is protected by Bridgehead for a while longer."
 };
 window.GP_EN_BODY = {
 "Inställningar": "Settings",
@@ -4731,7 +4999,14 @@ window.GP_EN_BODY = {
 "Din avatar": "Your avatar",
 "Fler vinstpoäng": "More victory points",
 "Färre vinstpoäng": "Fewer victory points",
-"Vinstpoäng för seger": "Victory points to win"
+"Vinstpoäng för seger": "Victory points to win",
+"Alla uppdrag": "All missions",
+"Lär dig spela": "Learn to play",
+"Nästa bana": "Next level",
+"OK, nästa": "OK, next",
+"Visa mig": "Show me",
+"Snabbtutorialen visar hela spelet på ett par minuter. Tutorialbanorna lär dig spelet steg för steg: varje bana har en lista med uppdrag, och du börjar med ungefär det du byggt i banorna före.": "The quick tutorial shows the whole game in a couple of minutes. The tutorial levels teach you the game step by step: each level has a list of missions, and you start with roughly what you built in the levels before.",
+"Tutorialbanor": "Tutorial levels"
 };
 window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires research centre level $1."], ["^Kräver verkstad nivå (\\d+)\\.$", "Requires workshop level $1."], ["^Kräver (\\d+) poäng i samma träd först\\.$", "Requires $1 points in the same tree first."], ["^Kräver ekonomicentrum nivå (\\d+)\\.$", "Requires economic centre level $1."]];
 </script>
@@ -4864,7 +5139,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   };
   // Rutans namn; en by heter som byn.
   const rname = t => t.type === 'village' && S && S.towns[t.id] ? S.towns[t.id].name : t.name;
-  const RIVAL_LEVELS = { easy: TR('Lätt'), normal: TR('Normal'), hard: TR('Svår') };
+  const RIVAL_LEVELS = { easy: TR('Lätt'), normal: TR('Normal'), hard: TR('Svår'), idle: TR('Passiv') };
   const UNITS = {
     soldier:   { name: TR('Soldat'), one: TR('soldat'), many: TR('soldater'), icon: 'u-soldier' },
     berserker: { name: TR('Berserker'), one: 'berserker', many: 'berserkers', icon: 'u-berserker' },
@@ -5249,6 +5524,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   function dispatch(action) {
     if (NET.role === 'guest') return guestDispatch(action);
     const r = E.apply(S, Object.assign({ player: ME }, action));
+    if (S.tut && r && r.ok && action.type === 'send' && E.isMine(S.tiles[action.to], ME)) S.tut.moved = true;   // tutorial: Flytta armé
     sfxCheck();
     refresh(true);
     save();
@@ -6623,6 +6899,19 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       const see = !viewer || E.canSee(st, viewer, i);
       const vz = clamp(s * 3.3, 22, 170);   // byns storlek
       if (t.hill) {
+        // Kullens försvarsbonus för den som håller den: grön vid plus, röd vid minus (vänster om mitten, trupperna står till höger).
+        if (t.owner && s >= 6) {
+          const v = Math.round(E.hillDef(st, t) * 100), txt = (v > 0 ? '+' : v < 0 ? '\u2212' : '\u00b1') + Math.abs(v) + '\u00a0%';
+          const fz = Math.round(clamp(s * 0.55, 10, 15)), col = v > 0 ? '#7fd37f' : v < 0 ? '#ff7d6b' : PAL.ink;
+          c.font = '700 ' + fz + 'px ' + NUMFONT;
+          const w = c.measureText(txt).width + fz + 12, h = fz + 6, x = cx - clamp(s * 1.05, 9, 36) - w / 2 + 4, y = cy + clamp(s * 0.35, 3, 12);
+          rr(c, x - w / 2, y - h / 2, w, h, h / 2); c.fillStyle = 'rgba(14,18,17,.88)'; c.fill();
+          c.lineWidth = 1.2; c.strokeStyle = col; c.stroke();
+          const sx = x - w / 2 + 5, sw = fz * 0.7, sh = fz * 0.8, sy = y - sh / 2;   // liten sköld
+          c.beginPath(); c.moveTo(sx, sy); c.lineTo(sx + sw, sy); c.lineTo(sx + sw, sy + sh * 0.45); c.quadraticCurveTo(sx + sw, sy + sh * 0.85, sx + sw / 2, sy + sh); c.quadraticCurveTo(sx, sy + sh * 0.85, sx, sy + sh * 0.45); c.closePath();
+          c.fillStyle = col; c.fill();
+          c.fillStyle = col; c.textAlign = 'right'; c.textBaseline = 'middle'; c.fillText(txt, x + w / 2 - 6, y + 1);
+        }
         if (t.post && s >= 6) { const h = clamp(s * 1.1, 9, 34); drawTower(c, cx - clamp(s * 1.3, 10, 44) - h * 0.2, cy + clamp(s * 0.4, 4, 14), h, t.post.lvl, t.post.wall, o ? o.hi : PAL.ink); }
       } else if (t.type === 'village') {
         // Startbyn: en liten medeltida by. Ledig byplats (veckospelet): en blek by utan fana.
@@ -6640,6 +6929,18 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
           c.fillText(String(t.post.lvl), cx - h * 0.55 + h * 0.32, cy - h * 0.15);
         }
       }
+      // Brohuvud: en sköld i ägarens färg och tiden som är kvar.
+      if (t.type !== 'village' && E.safeAt(st, t) && s >= 7) {
+        const who = st.players[t.owner || t.occ], z = clamp(s * 3.6, 20, 96), x = cx + s * 0.25, y = cy - s * 1.95;
+        drawShield(c, x, y, z, who ? who.color : PAL.ink);
+        if (s >= 10) {
+          const f = Math.round(clamp(z * 0.24, 9, 14));
+          c.font = '700 ' + f + 'px ' + NUMFONT; c.textAlign = 'left'; c.textBaseline = 'middle';
+          c.lineWidth = 3; c.lineJoin = 'round'; c.strokeStyle = 'rgba(10,14,12,.8)'; c.fillStyle = PAL.trim;
+          const txt = dur(t.safeUntil - st.time);
+          c.strokeText(txt, x + z * 0.4, y + z * 0.24); c.fillText(txt, x + z * 0.4, y + z * 0.24);
+        }
+      }
       // Trupper: syns på dina rutor och grannarna till dem (och på kullen).
       if (opts.noTroops || !see) return;
       const n = E.total(E.defendersAt(st, i));
@@ -6652,6 +6953,18 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       if (n > 0 && s >= 9) drawUnitStack(c, bx, by, E.defendersAt(st, i), col, fs, !t.owner && !t.occ && t.type !== 'village');
       else drawBadge(c, bx, by, String(n), col, fs);
     });
+    // Gruvtjuv: guldet du får från en annan spelares gruva, i en liten bricka under gruvan.
+    const vp = viewer && st.players[viewer];
+    if (s >= 8 && vp && (vp.skills || {}).leech) for (const m of decorFor(st).mines) {
+      const g = E.leechAt(st, vp, m.i);
+      if (!g) continue;
+      const txt = '+' + gpmTxt(g), f = Math.round(clamp(s * 0.42, 9, 12)), x = X(m.x), y = Y(m.y) + MINE_K * s * 0.62;
+      c.font = '700 ' + f + 'px ' + NUMFONT;
+      const w = c.measureText(txt).width + 10, h = f + 5;
+      rr(c, x - w / 2, y - h / 2, w, h, h / 2); c.fillStyle = 'rgba(14,18,17,.88)'; c.fill();
+      c.lineWidth = 1.4; c.strokeStyle = vp.color || '#e6b443'; c.stroke();
+      c.fillStyle = '#e6b443'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(txt, x, y + 0.5);
+    }
     // Uppgraderade guldgruvor: nivån i en liten guldbricka vid gruvan.
     if (s >= 8) for (const m of decorFor(st).mines) {
       const t = st.tiles[m.i];
@@ -6891,6 +7204,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if (hover >= 0 && hover !== ui.sel) innerStroke(c, P[hover], 'rgba(255,255,255,.55)', 1.4, s);
     if (ui.fwd && ui.fwd.to >= 0) innerStroke(c, P[ui.fwd.to], PAL.gold, 3, s);
     if (ui.sel >= 0) innerStroke(c, P[ui.sel], PAL.gold, 3, s);
+    const tt = S.tut ? tutTile() : -1;   // tutorial: uppdragets ruta pulserar
+    if (tt >= 0 && P[tt]) { const k = 0.5 + 0.5 * Math.sin(performance.now() / 260); innerStroke(c, P[tt], 'rgba(126,214,255,' + (0.55 + 0.45 * k).toFixed(2) + ')', 2.4 + 2.2 * k, s); }
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     // Linje från vald avsändare till målet
     // Vägen trupperna skulle ta (genom dina rutor).
@@ -7312,6 +7627,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         if (n) note = (note ? note + ' · ' : '') + '+' + gpmTxt(g).replace('/', TR(' guld/')) + TR(' från ') + n + ' ' + plural(n, TR('utpost'), TR('utposter'));
         const nm = S.tiles.filter(t => t.owner === ME && t.mine).length;
         if (nm) note = (note ? note + ' · ' : '') + '+' + gpmTxt(E.mineGoldPerHour(S, p)).replace('/', TR(' guld/')) + TR(' från ') + nm + ' ' + plural(nm, TR('guldgruva på en ruta'), TR('guldgruvor på rutor'));
+        const lg = E.leechGph(S, p);
+        if (lg) note = (note ? note + ' · ' : '') + '+' + gpmTxt(lg).replace('/', TR(' guld/')) + TR(' från Gruvtjuv');
       }
       if (b.key === 'econ') {
         const ms = S.tiles.filter(t => t.owner === ME && t.mine);
@@ -7625,7 +7942,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   const vpEvery = t => (t && t.hill ? 1 / ((S.cfg.hill && S.cfg.hill.vpPerMinute) || 1) : S.cfg.vpPerRegionMinutes) * paceS();
   const vpTxt = t => S.week ? TR('1 per ') + durWords(vpEvery(t) * MIN) : t && t.hill ? TR('1 per minut') : TR('1 per ') + S.cfg.vpPerRegionMinutes + TR(' min');
   // Guldgruva på rutan: hur mycket extra guld den ger och vem som får det.
-  const mineRate = t => '+' + gpmTxt(E.regionMineGph(S, t.mineLvl)).replace('/', TR(' guld/'));
+  const mineRate = t => '+' + gpmTxt(E.regionMineGph(S, t.mineLvl, t.owner ? S.players[t.owner] : t.occ === ME ? me() : null)).replace('/', TR(' guld/'));
   // Kullen: vinstpoäng och försvarsbonusen som sjunker ju längre samma spelare har hållit den.
   const pcs = x => (x > 0.0001 ? '+' : x < -0.0001 ? '−' : '±') + Math.round(Math.abs(x) * 100) + '\u00a0%';
   function hillRule(h, stepMs) {
@@ -7649,7 +7966,9 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       : t.occ === ME ? TR('Bygg en utpost här så får du <b>') + mineRate(t) + TR('</b> extra från guldgruvan.')
       : o ? esc(pname(o)) + TR(' får <b>') + mineRate(t) + TR('</b> extra från guldgruvan här. Ta rutan och bygg en egen utpost för att få guldet själv.')
       : TR('Ta rutan och bygg en utpost för att få <b>') + mineRate(t) + TR('</b> extra från guldgruvan.');
-    return '<div class="mine-note">' + icon('b-goldmine') + '<p><b>' + TR('Guldgruva') + (t.mineLvl ? TR(' nivå ') + t.mineLvl : '') + '.</b> ' + txt + '</p></div>';
+    const lg = o && t.owner !== ME ? E.leechAt(S, me(), t.id) : 0;
+    const steal = lg ? ' <b>' + TR('Gruvtjuv') + ':</b> ' + TR('du får <b>+') + gpmTxt(lg).replace('/', TR(' guld/')) + TR('</b> härifrån.') : '';
+    return '<div class="mine-note">' + icon('b-goldmine') + '<p><b>' + TR('Guldgruva') + (t.mineLvl ? TR(' nivå ') + t.mineLvl : '') + '.</b> ' + txt + steal + '</p></div>';
   }
   function sheetHead(t) {
     const o = t.owner ? S.players[t.owner] : null, oc = !o && t.occ ? S.players[t.occ] : null;
@@ -7660,7 +7979,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       : oc ? '<span class="tag occ" style="border-color:' + oc.hi + '">' + esc(pname(oc)) + '</span>'
       : '<span class="tag neutral">' + TR('Neutral') + '</span>';
     const imm = (o && E.immune(S, o.id)) ? o : null;
-    const prot = imm ? '<span class="tag shield">' + icon('k-defense') + TR('Immun ') + durWords(imm.immuneUntil - S.time) + '</span>' : '';
+    const prot = (imm ? '<span class="tag shield">' + icon('k-defense') + TR('Immun ') + durWords(imm.immuneUntil - S.time) + '</span>' : '') +
+      (E.safeAt(S, t) && t.type !== 'village' ? '<span class="tag shield" title="' + TR('Brohuvud: andra spelare kan inte anfalla rutan än.') + '">' + icon('s-bridge') + '<span id="sh-safe">' + dur(t.safeUntil - S.time) + '</span></span>' : '');
     const sub = t.type === 'village' ? TR('Startby') : t.adj.length + (t.adj.length === 1 ? TR(' granne') : TR(' grannar'));
     // Bilden uppe till vänster: ägarens (eller ockupantens) avatar, en bandit på neutrala rutor.
     const who = (t.owner || t.occ) && S.players[t.owner || t.occ];
@@ -7727,7 +8047,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if (!S || ui.sel < 0) { if (!el.hidden) { el.hidden = true; placeSheet(); clampCam(); } ui.sheetSig = ''; return; }
     if (ui.fwd) { renderFwd(el); return; }
     const t = S.tiles[ui.sel], mode = sheetMode(ui.sel), c = S.cfg;
-    const sig = ui.sel + '|' + mode + '|' + t.owner + '|' + t.occ + '|' + !!t.post + '|' + (sourcesFor(ui.sel).length > 0) + '|' + (t.mineLvl || 0);
+    const sig = ui.sel + '|' + mode + '|' + t.owner + '|' + t.occ + '|' + !!t.post + '|' + (sourcesFor(ui.sel).length > 0) + '|' + (t.mineLvl || 0) + '|' + E.safeAt(S, t) + '|' + E.leechAt(S, me(), ui.sel);
     if (sig !== ui.sheetSig) {
       ui.sheetSig = sig;
       ui.rowSig = '';
@@ -7989,6 +8309,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       else def = '<b>?</b> <span class="muted">' + TR('syns bara från en granne') + '</span>';
       $('sh-def').innerHTML = def;
     }
+    if ($('sh-safe')) setText($('sh-safe'), dur(t.safeUntil - S.time));
     if ($('sh-hill')) { const h = hillTxt(t); if ($('sh-hill').innerHTML !== h) $('sh-hill').innerHTML = h; }
     if ($('sh-dp')) { const d = E.tileDefense(S, ui.sel, true); $('sh-dp').innerHTML = '<b>' + nf1.format(E.defensePoints(S, ui.sel, true)) + '</b>' + (d.flat ? ' <span class="muted">(' + TR('varav ') + d.flat + TR(' grundförsvar') + ')</span>' : ''); }
     if ($('stayRow')) $('stayRow').hidden = t.type === 'village';
@@ -8024,9 +8345,9 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       setText($('mineUpTxt'), maxM ? TR('Guldgruvan har högsta nivå') : TR('Guldgruva nivå ') + (ML + 1));
       $('mineUpCostBox').hidden = maxM; setText($('mineUpCost'), String(rm.upCost));
       $('mineUpBtn').disabled = maxM || ec <= ML || tw.gold < rm.upCost;
-      setText($('mineUpEff'), maxM ? '' : goldRate(rm.perLevel));
+      setText($('mineUpEff'), maxM ? '' : goldRate(rm.perLevel * (1 + c.skills.mine.per * (p.skills.mine || 0))));
       setText($('mineUpWhen'), maxM ? '' : ec <= ML ? TR('Kräver ekonomicentrum nivå ') + (ML + 1) : when(rm.upCost));
-      setRoi('rm', maxM ? Infinity : E.roiMs(S, p, rm.upCost, E.regionMineGph(S, ML + 1) - E.regionMineGph(S, ML)));
+      setRoi('rm', maxM ? Infinity : E.roiMs(S, p, rm.upCost, E.regionMineGph(S, ML + 1, p) - E.regionMineGph(S, ML, p)));
     }
     if (mode === 'occ') {
       $('buildBtn').disabled = tw.gold < c.outpost.cost;
@@ -8276,24 +8597,28 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   ];
   const pctS = x => Math.round(x * 100) + '\u00a0%';
   // Nu → nästa nivå: "<b>+12 %</b> → +18 %" (inget fetstilt på nivå 0, ingen pil på högsta nivån).
+  const secTxt = ms => ms < 120000 ? Math.round(ms / 1000) + '\u00a0s' : durWords(ms);
   const lvTxt = (r, max, f) => (r ? '<b>' + f(r) + '</b>' : f(0)) + (r < max ? ' → ' + f(r + 1) : '');
   // Färdighetsträden (som i World of Warcraft): tre träd bredvid varandra, tre tiers uppifrån och ned.
   const SKILLS = {
     atk:   { name: TR('Blodtörst'), icon: 's-atk', desc: (c, r) => TR('Anfallspoäng ') + lvTxt(r, c.max, x => '+' + pctS(c.per * x)) + '.' },
     grim:  { name: TR('Dödsångest'), icon: 's-grim', desc: (c, r) => TR('Fler lik från dina stupade trupper: ') + lvTxt(r, c.max, x => '+' + pctS(c.per * x)) + TR('. Liken väcks som draugar i kryptan.') },
+    bridge: { name: TR('Brohuvud'), icon: 's-bridge', desc: (c, r) => TR('En ruta du tar kan inte anfallas av andra spelare under ') + lvTxt(r, c.max, x => secTxt(c.sec * x * 1000 * (S.cfg.pace || 1))) + TR('. Anfall som redan är på väg dit vänder utan strid. Rutan får en sköld på kartan så länge skyddet varar.') },
     blitz: { name: TR('Snabbfotad'), icon: 's-blitz', desc: (c, r) => TR('Anfall går ') + lvTxt(r, c.max, x => pctS(c.per * x)) + TR(' snabbare.') },
     vet:   { name: TR('Stridsduglig'), icon: 's-vet', desc: c => TR('Dina anfall ignorerar grundförsvaret från utposter och ') + pctS(c.wall) + TR(' av försvarsbonusen från murar (i utposter och byar).') },
     def:   { name: TR('Hårdhudad'), icon: 's-def', desc: (c, r) => TR('Försvarspoäng ') + lvTxt(r, c.max, x => '+' + pctS(c.per * x)) + '.' },
     wire:  { name: TR('Järnspikar'), icon: 's-wire', desc: (c, r) => TR('Alla dina rutor, byn inräknad, får ') + lvTxt(r, c.max, x => '+' + c.flat * x) + TR(' i grundförsvar, även när ingen står där.') },
     move:  { name: TR('En för alla, alla för en'), icon: 's-move', desc: (c, r) => TR('Förflyttningar av trupper mellan dina rutor och hem till byn går ') + lvTxt(r, c.max, x => pctS(c.per * x)) + TR(' snabbare.') },
+    again: { name: TR('En gång till!'), icon: 's-again', desc: (c, r) => TR('För varje draug som dör när du försvarar dig får du tillbaka ') + lvTxt(r, c.max, x => nf1.format(c.per * x) + TR(' lik')) + TR(' i kryptan.') },
     dead:  { name: TR('Mur av döda'), icon: 's-dead', desc: c => TR('Dina draugar får +') + nf1.format(c.def) + TR(' i försvar (') + nf1.format(S.cfg.units.draug.def) + ' → ' + nf1.format(S.cfg.units.draug.def + c.def) + ').' },
     eco:   { name: TR('Guldpost'), icon: 's-eco', desc: (c, r) => TR('Dina utposter ger ') + lvTxt(r, c.max, x => '+' + pctS(c.per * x)) + TR(' guld.') },
-    mine:  { name: TR('Gruvdrift'), icon: 's-mine', desc: (c, r) => TR('Guldgruvan i byn ger ') + lvTxt(r, c.max, x => '+' + pctS(c.per * x)) + TR(' guld.') },
+    mine:  { name: TR('Gruvdrift'), icon: 's-mine', desc: (c, r) => TR('Alla dina guldgruvor, i byn och på kartan, ger ') + lvTxt(r, c.max, x => '+' + pctS(c.per * x)) + TR(' guld.') },
     loot:  { name: TR('Som ny!'), icon: 's-loot', desc: (c, r) => TR('Du får ') + lvTxt(r, c.max, x => c.gold * x + TR(' guld')) + TR(' för varje fientlig trupp du dödar, när du anfaller och när du försvarar dig.') },
+    leech: { name: TR('Gruvtjuv'), icon: 's-leech', desc: (c, r) => TR('Gränsar en av dina rutor till en annan spelares guldgruva får du ') + lvTxt(r, c.max, x => pctS(c.per * x)) + TR(' av gruvans guld. Ägaren förlorar inget.') },
     build: { name: TR('Byggmästare'), icon: 's-build', desc: c => TR('Att bygga ut utposter och murar kostar ') + pctS(c.per) + TR(' mindre.') },
   };
   // Långa svenska namn får ett mjukt bindestreck i sammansättningen (Döds-ångest) så att de radbryts snyggt under ikonen.
-  const talName = s => LANG === 'sv' ? s.replace(/^(Döds|Hård|Järn|Snabb|Strids|Bygg|Blod|Gruv|Guld)(?=\S)/, '$1\u00ad') : s;
+  const talName = s => LANG === 'sv' ? s.replace(/^(Döds|Hård|Järn|Snabb|Strids|Bygg|Blod|Gruv|Guld|Bro)(?=\S)/, '$1\u00ad') : s;
   ui.skillsSig = '';
   function renderSkills(force) {
     const p = me(), c = S.cfg;
@@ -8343,7 +8668,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   function relevant(e) {
     if (e.kind === 'reinforce') return false;
     if (e.player === ME) return true;
-    if (e.kind === 'battle' && e.defender === ME) return true;
+    if ((e.kind === 'battle' || e.kind === 'bounce') && e.defender === ME) return true;
     if ((e.kind === 'raid' || e.kind === 'field') && e.defender === ME) return true;
     if (e.kind === 'win' || e.kind === 'joined') return true;
     return false;
@@ -8416,7 +8741,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       if (xp) foot += '<b class="xp">+' + xp + ' exp</b>. ';
       foot += bountyTxt(e, mineAtk);
       if (e.flat) foot += TR('Försvaret hade +') + e.flat + TR(' i grundförsvar. ');
-      if (mineAtk) foot += e.captured || e.occupied ? razeTxt(e) + (e.hill ? TR('Kullen är din. ') : TR('Du tog rutan senast. Bygg en utpost för att ta kontroll. ')) + backTxt(e) : TR('Ingen överlevde.');
+      if (mineDef && e.revD) foot += '<b>+' + nf1.format(e.revD) + TR(' lik</b> (En gång till!). ');
+      if (mineAtk) foot += e.captured || e.occupied ? razeTxt(e) + (e.hill ? TR('Kullen är din. ') : TR('Du tog rutan senast. Bygg en utpost för att ta kontroll. ')) + backTxt(e) + (e.safe ? ' ' + TR('Brohuvud: andra spelare kan inte anfalla rutan på ') + secTxt(e.safe) + '.' : '') : TR('Ingen överlevde.');
       else foot += e.captured ? esc(who(e.player)) + TR(' tog rutan') + (e.postLvl ? TR(' och förstörde din utpost (nivå ') + e.postLvl + ')' : '') + '.' :
         e.occupied ? esc(who(e.player)) + TR(' tog över rutan.') :
         TR('Rutan är kvar som din med ') + (e.D - e.dLoss) + TR(' försvarare.');
@@ -8434,7 +8760,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       const defLabel = mineAtk ? esc(who(e.defender)) : TR('Ditt försvar');
       const raw = rawPow(e.aPow, e.dPow), uc = S.cfg.units;
       const aBase = KEYS.reduce((x, k) => x + (e.aU[k] || 0) * uc[k].atk, 0), dBase = KEYS.reduce((x, k) => x + (e.dU[k] || 0) * uc[k].def, 0) + (e.flat || 0);
-      let foot = bountyTxt(e, mineAtk);
+      let foot = bountyTxt(e, mineAtk) + (!mineAtk && e.revD ? '<b>+' + nf1.format(e.revD) + TR(' lik</b> (En gång till!). ') : '');
       if (mineAtk) foot += e.won ? trupper(e.survivors) + TR(' bär hem ') + goldTxt(pl.gold) + '.' : TR('Ingen överlevde.');
       else foot += e.won ? esc(who(e.player)) + TR(' plundrade ') + goldTxt(pl.gold) + TR(' från byn.') : TR('Byn höll. ') + (e.D - e.dLoss) + TR(' försvarare kvar.');
       if (e.siege) foot += ' ' + (mineAtk ? TR('Siegemännen sänkte ') : esc(who(e.player)) + TR('s siegemen sänkte ')) + BLDK[e.siege.key].name.toLowerCase() + (e.siege.drop > 1 ? ' ' + e.siege.drop + TR(' nivåer') : '') + TR(' till nivå ') + e.siege.level +
@@ -8446,6 +8772,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     }
     if (e.kind === 'lootHome') return small(TR('Bytet är hemma: +') + fmt(e.kept.gold) + TR(' guld') + (e.kept.gold < e.loot.gold ? TR(' (resten fick inte plats)') : '') + '.');
     if (e.kind === 'built') return small(TR('Utpost byggd i ') + name + TR('. Rutan är din.'));
+    if (e.kind === 'bounce') return small(e.player === ME ? TR('Ditt anfall mot ') + name + TR(' vände: rutan skyddades av Brohuvud. ') + trupper(e.n) + TR(' går tillbaka.')
+      : who(e.player) + TR('s anfall mot ') + name + TR(' vände utan strid tack vare Brohuvud.'), e.player === ME ? 'lost' : 'won');
     if (e.kind === 'moveFail') { const bt = S.tiles[e.back]; return small(trupper(e.n) + TR(' skulle till ') + name + (!bt || bt.type === 'village' ? TR(', men rutan var inte din längre. De går hem till byn.') : TR(', men rutan var inte din längre. De går till ') + rname(bt) + '.'), 'alert'); }
     if (e.kind === 'raised') return small(TR('Kryptan: draugarna har vaknat.'));
     if (e.kind === 'trained') return small(TR('Barracken') + ': ' + trupper(e.n) + ' ' + (e.n === 1 ? TR('är klar') : TR('är klara')) + '.');
@@ -8475,7 +8803,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   ui.repAtk = ui.repDef = true;
   function repShown(e) {
     if (e.kind === 'field') return ui.repAtk;   // fältslag: båda anföll
-    const fight = e.kind === 'battle' || e.kind === 'raid';
+    const fight = e.kind === 'battle' || e.kind === 'raid' || e.kind === 'bounce';
     if (!fight) return ui.repAtk && ui.repDef;
     return (ui.repAtk && e.player === ME) || (ui.repDef && e.defender === ME);
   }
@@ -8514,6 +8842,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if (!S) return;
     TW();   // håller ui.town giltig
     updateHUD();
+    tutTick();
     if (!$('view-village').hidden) updateVillage();
     if (!$('view-troops').hidden) { renderHomeUnits(TW()); updateTraining(TW()); }
     if (!$('ov-stand').hidden) renderStand();
@@ -8540,6 +8869,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       if (NET.lobby && NET.lobby.started) store.set(OSAVE_KEY, Object.assign(makeSave(), { lobby: lobbySave() }));
       return;
     }
+    if (S.tut) { if (!S.tut.finished && !S.winner) store.set(TSAVE_KEY, makeSave()); return; }
     if (S.week) { if (!ui.catching) store.set(WSAVE_KEY, makeSave()); return; }
     if (!S.online) store.set(SAVE_KEY, makeSave());
   }
@@ -8592,7 +8922,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if (!$('ledger').children.length) buildLedger();
     if (!$('trainSlot').children.length) buildTrain();
     ui.fwd = null;
-    ['ov-start', 'ov-pause', 'ov-menu', 'ov-win', 'ov-stand', 'ov-rename', 'ov-online', 'ov-lost'].forEach(id => { $(id).hidden = true; });
+    ['ov-start', 'ov-pause', 'ov-menu', 'ov-win', 'ov-stand', 'ov-rename', 'ov-online', 'ov-lost', 'ov-tut'].forEach(id => { $(id).hidden = true; });
+    ui.tutSig = ''; ui.tutFailed = false; ui.tutOpen = true; ui.tourGo = null;
     onlineChrome();
     $('sheet').hidden = true;
     applyLayout();
@@ -8622,8 +8953,10 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   }
   // Startskärmens flikar: Spela ensam (timmesspelet) och Spela online (lobby och veckoservern).
   function setStartMode(m) {
-    ui.startMode = m === 'online' ? 'online' : 'solo';
+    ui.startMode = m === 'online' || m === 'solo' ? m : 'tut';
     store.set(MODE_KEY, ui.startMode);
+    $('paneTut').hidden = ui.startMode !== 'tut';
+    if (ui.startMode === 'tut') renderTutPane();
     $('paneSolo').hidden = ui.startMode !== 'solo';
     $('paneOnline').hidden = ui.startMode !== 'online';
     document.querySelectorAll('#modeSeg [data-mode]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.mode === ui.startMode)));
@@ -8631,8 +8964,9 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   function showStart() {
     running = false;
     if (NET.role) leaveOnline();
-    ['ov-online', 'ov-lost', 'ov-pause', 'ov-menu', 'ov-win'].forEach(id => { $(id).hidden = true; });
+    ['ov-online', 'ov-lost', 'ov-pause', 'ov-menu', 'ov-win', 'ov-tut'].forEach(id => { $(id).hidden = true; });
     paused = false;
+    $('tut').hidden = true; tutHL([]);
     $('ov-start').hidden = false;
     const os = store.get(OSAVE_KEY);
     const oOk = os && os.lobby && E.isValidSave(os.state) && !os.state.winner;
@@ -8685,6 +9019,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   }
   function showWin() {
     winShown = true;
+    if (S.tut) { tutFinish(S.winner === ME, LX(pname(S.players[S.winner]) + ' nådde ' + S.cfg.vpToWin + ' vinstpoäng först. Ta fler rutor tidigt, försvara gränsen och håll kullen längre. Försök igen!', pname(S.players[S.winner]) + ' reached ' + S.cfg.vpToWin + ' victory points first. Take more territories early, defend the border and hold the Hill longer. Try again!')); return; }
     const p = me();
     const ms = S.endedAt || S.time;
     const won = S.winner === ME;
@@ -8802,6 +9137,18 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       case 'week-level': ui.wLevel = b.dataset.level; renderWeekBox(); break;
       case 'week-addbot': addWeekBot(); break;
       case 'stand-tab': ui.standTab = b.dataset.tab; ui.standSig = ''; renderStand(); break;
+      case 'tut-play': tutStart(+b.dataset.level); break;
+      case 'tut-continue': {
+        const ts = store.get(TSAVE_KEY);
+        if (ts && E.isValidSave(ts.state) && ts.state.tut) beginGame(ts.state, ts.speed, ts.acc);
+        break;
+      }
+      case 'tut-toggle': ui.tutOpen = !ui.tutOpen; ui.tutSig = ''; tutTick(); break;
+      case 'tut-show': tutGo(tutCur() || TUTS[S.tut.level].missions[TUTS[S.tut.level].missions.length - 1]); break;
+      case 'tut-back': if (S && S.tut && S.tut.done.length) { S.tut.done.pop(); ui.tourGo = null; ui.tutSig = ''; tutTick(); save(); } break;
+      case 'tut-ack': { const m = tutCur(); if (m && m.ack) { S.tut.done.push(m.id); if (!TUTS[S.tut.level].tour) { sfxUntil.unlock = 0; playSfx('unlock'); } ui.tutSig = ''; save(); tutTick(); } break; }
+      case 'tut-next': { const n = b.dataset.level; if (n === 'solo') { ui.startMode = 'solo'; showStart(); } else if (n) tutStart(+n); else showStart(); break; }
+      case 'tut-quit': showStart(); break;
       case 'continue': {
         const sv = store.get(SAVE_KEY);
         if (sv && E.isValidSave(sv.state)) beginGame(sv.state, sv.speed, sv.acc);
@@ -8853,7 +9200,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
           const over = NET.role === 'host' && S && S.winner;
           leaveOnline();
           if (over) store.del(OSAVE_KEY);
-        } else if (act === 'really-new') store.del(SAVE_KEY);
+        } else if (act === 'really-new') store.del(S && S.tut ? TSAVE_KEY : SAVE_KEY);
         showStart();
         break;
       case 'online': openOnline(); break;
@@ -9018,7 +9365,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     supabaseKey: 'sb_publishable_eyoxyRNFN4f1KOsOhJjdBQ_LGNIQ3DZ',   // publik nyckel, får synas
     ice: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
   };
-  const PROTO = 14, MAXP = E.CONFIG.maxOnline || 8, CHUNK = 15000;
+  const PROTO = 15, MAXP = E.CONFIG.maxOnline || 8, CHUNK = 15000;
   const useLocal = () => !ONLINE_CFG.supabaseUrl || !ONLINE_CFG.supabaseKey || /[?&]lokal\b/.test(location.search);
   function rid(n) {
     const a = 'abcdefghjkmnpqrstuvwxyz23456789', r = crypto.getRandomValues(new Uint8Array(n));
@@ -9694,12 +10041,432 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   });
 
 
+  // =====================================================================
+  //   TUTORIAL: sju banor med uppdrag (startläget i motorn: createGame({ tutorial: n })).
+  //   Varje uppdrag: id, rubrik och text (svenska/engelska), check() = klart, hl() = element som markeras,
+  //   tile() = ruta som markeras på kartan, go() = "Visa mig", ack = klart när spelaren trycker OK.
+  //   Klara uppdrag sparas i S.tut.done. Bana 1–5 är klara när alla uppdrag är gjorda, bana 6–7 när man vinner.
+  // =====================================================================
+  const TSAVE_KEY = 'guld-och-potatis:tut:v1';      // pågående tutorialbana
+  const TDONE_KEY = 'guld-och-potatis:tutdone:v1';  // vilka banor som är klara
+  const army = k => E.armyUnits(S, me())[k] || 0;
+  const freePlot = () => { const pl = TW().plots || []; for (let i = 1; i < pl.length; i++) if (!pl[i]) return i; return -1; };
+  const plotOf = k => (TW().plots || []).indexOf(k);
+  const nameOf2 = id => S.players[id] ? pname(S.players[id]) : '';
+  // Markera: tomten med byggnaden k (eller en ledig tomt), knappen i byggmenyn och Bygg ut.
+  const hlBuild = k => () => { const i = plotOf(k), f = freePlot(); return [i >= 0 ? '#vscene .plot[data-plot="' + i + '"]' : f >= 0 ? '#vscene .plot[data-plot="' + f + '"]' : '', '#vbuild [data-act=build-plot][data-b="' + k + '"]', '#ledger .bld[data-b="' + k + '"] [data-act=upgrade]', '.tab[data-tab=village]']; };
+  const goBuild = k => () => { setTab('village'); const i = plotOf(k), f = freePlot(); ui.vsel = i >= 0 ? i : f; updateVillage(); };
+  const goPlot = k => () => { setTab('village'); ui.vsel = plotOf(k); updateVillage(); };
+  const goTile = i => () => { if (i == null || i < 0) return; setTab('map'); centerOn(i); ui.fwd = null; selectTile(i); };
+  const goTab = t => () => setTab(t);
+  const viewTile = i => { if (i == null || i < 0) return; setTab('map'); ui.sel = -1; ui.fwd = null; renderSheet(); centerOn(i); };   // bara kartan, utan rutpanelen
+  const ownsT = i => { const t = S.tiles[i]; return !!t && (t.owner === ME || t.occ === ME); };
+  // Förslag: en neutral ruta bredvid dina med minst antal banditer (för expansionen).
+  const nextNeutral = () => { let best = -1, bn = 99; S.tiles.forEach((t, i) => { if (t.type !== 'land' || t.hill || t.off || t.owner || t.occ) return; if (!t.adj.some(j => S.tiles[j].owner === ME)) return; if (t.troops < bn) { bn = t.troops; best = i; } }); return best; };
+  // Den senaste stora rapporten (strid eller plundring) om rutan i.
+  const repAt = i => { const b = document.querySelector('#reports article.rep:not(.small) [data-tile="' + i + '"]'); return b ? b.closest('article') : null; };
+  const sumDrop = () => S.log.reduce((n, e) => n + (e.kind === 'raid' && e.player === ME && e.siege ? e.siege.drop || 1 : 0), 0);
+  const TUTS = {
+    // Snabbtutorialen: en genomgång utan uppgifter. Varje steg visar (och markerar) en del av spelet; Nästa och Tillbaka.
+    0: { name: LX('Snabbtutorial', 'Quick tutorial'), tour: true,
+      desc: LX('En genomgång av hela spelet på ett par minuter, utan att du behöver bygga, träna eller anfalla. För dig som har spelat strategispel förut.', 'A tour of the whole game in a couple of minutes, without having to build, train or attack. For players who know strategy games.'),
+      done: LX('Nu har du sett hela spelet. Starta ett eget spel, eller spela tutorialbanorna om du vill öva steg för steg.', 'Now you have seen the whole game. Start a game of your own, or play the tutorial levels if you want to practise step by step.'),
+      missions: [
+        { id: 'q1', ack: true, title: LX('Välkommen', 'Welcome'),
+          text: LX('Det här är en genomgång av spelet. Du behöver inte göra något: tryck på <b>Nästa</b> så visar vi var allt finns. Byn och armén är redan uppbyggda så att du ser alla delar.',
+            'This is a tour of the game. You do not need to do anything: tap <b>Next</b> and we show you where everything is. The village and the army are already built so that you can see every part.'),
+          go: () => { setTab('village'); ui.vsel = -1; updateVillage(); } },
+        { id: 'q2', ack: true, title: LX('Målet: vinstpoäng', 'The goal: victory points'),
+          text: LX('Varje ruta du kontrollerar, byn inräknad, ger <b>1 vinstpoäng var tionde minut</b>. <b>Kullen</b> i mitten ger 1 vinstpoäng i minuten. Först till 100 vinner. Här ser du dina vinstpoäng, takten och rivalernas staplar. Tryck på dem för ställningen.',
+            'Every territory you control, the village included, gives <b>1 victory point every ten minutes</b>. The <b>Hill</b> in the middle gives 1 victory point per minute. First to 100 wins. Here you see your victory points, your rate and the rivals’ bars. Tap them for the standings.'),
+          hl: () => ['#st-vp'] },
+        { id: 'q3', ack: true, title: LX('Guld', 'Gold'),
+          text: LX('Guld behövs till allt. Här står hur mycket du har, förrådets tak (skattkammaren höjer det) och hur mycket du får i minuten från guldgruvan, utposterna och guldgruvorna på kartan.',
+            'You need gold for everything. Here is how much you have, your storage limit (the treasury raises it) and how much you get per minute from the gold mine, the outposts and the gold mines on the map.'),
+          hl: () => ['#st-gold'] },
+        { id: 'q4', ack: true, title: LX('Trupper och tempo', 'Troops and speed'),
+          text: LX('Trupperna hemma i byn och hur många du har totalt. Uppe till höger står speltiden: med <b>−</b> och <b>+</b> ändrar du tempot (0,5–10×), och du kan pausa.',
+            'Your troops at home and how many you have in total. At the top right is the game time: with <b>−</b> and <b>+</b> you change the speed (0.5–10×), and you can pause.'),
+          hl: () => ['#st-army', '#speedDown', '#speedUp', '#pauseBtn'] },
+        { id: 'q5', ack: true, title: LX('Nivå och erfarenhet', 'Level and experience'),
+          text: LX('Du får erfarenhet när du dödar trupper, och varje nivå ger ett <b>färdighetspoäng</b>. Den röda siffran visar poäng som du inte har fördelat än.',
+            'You gain experience when you kill troops, and each level gives a <b>skill point</b>. The red number shows points you have not spent yet.'),
+          hl: () => ['#lvlchip'] },
+        { id: 'q6', ack: true, title: LX('Byn', 'The village'),
+          text: LX('Byn har tomter. Tryck på en <b>ledig tomt</b> (+) för att bygga något nytt, och på en byggnad för att bygga ut den eller använda den. <b>Muren</b> byggs på ringen runt byn och ger +8 % försvar per nivå.',
+            'The village has plots. Tap an <b>empty plot</b> (+) to build something new, and a building to upgrade or use it. The <b>wall</b> is built on the ring around the village and gives +8% defence per level.'),
+          hl: () => ['#vscene', '.wall-btn'], go: () => { setTab('village'); ui.vsel = -1; updateVillage(); } },
+        { id: 'q7', ack: true, title: LX('Guldgruvan', 'The gold mine'),
+          text: LX('Guldgruvan ger mer guld för varje nivå. Den blå rutan <b>ROI</b> visar hur många minuter det tar innan uppgraderingen har betalat sig. Det är oftast det bästa sättet att växa i början.',
+            'The gold mine gives more gold for every level. The blue <b>ROI</b> box shows how many minutes it takes for the upgrade to pay for itself. In the beginning that is usually the best way to grow.'),
+          hl: () => ['#vscene .plot[data-plot="0"]', '#ledger .bld[data-b="goldmine"]'], go: goPlot('goldmine') },
+        { id: 'q8', ack: true, title: LX('Barracken och trupperna', 'The barracks and the troops'),
+          text: LX('Barracken tränar trupper, och en större barrack tränar snabbare. Anfall/försvar: <b>soldat</b> 1/1, <b>berserker</b> 1,5/0,3, <b>sköldgrabb</b> 0,5/1,5 och <b>siegeman</b> 2/1. Berserkers anfaller bäst och sköldgrabbar försvarar bäst. Trupperna tränas under Trupper.',
+            'The barracks train troops, and bigger barracks train faster. Attack/defence: <b>soldier</b> 1/1, <b>berserker</b> 1.5/0.3, <b>shieldbearer</b> 0.5/1.5 and <b>siegeman</b> 2/1. Berserkers attack best and shieldbearers defend best. You train troops under Troops.'),
+          hl: () => ['[data-act=tkind]', '#trainBtn'], go: goTab('troops') },
+        { id: 'q9', ack: true, title: LX('Forskningscentret', 'The research centre'),
+          text: LX('Här låser du upp nya trupptyper: berserker på nivå 1, sköldgrabb på nivå 2 och siegeman på nivå 3.',
+            'Here you unlock new troop types: berserker at level 1, shieldbearer at level 2 and siegeman at level 3.'),
+          hl: () => ['#vscene .plot[data-plot="' + plotOf('lab') + '"]', '#labRows'], go: goPlot('lab') },
+        { id: 'q10', ack: true, title: LX('Verkstaden', 'The workshop'),
+          text: LX('Verkstaden förbättrar anfall eller försvar för alla dina trupper, eller en trupptyp, med +6 % per nivå. Den kan förbättra upp till sin egen nivå.',
+            'The workshop improves attack or defence for all your troops, or one troop type, by +6% per level. It can improve up to its own level.'),
+          hl: () => ['#vscene .plot[data-plot="' + plotOf('workshop') + '"]', '#research'], go: goPlot('workshop') },
+        { id: 'q11', ack: true, title: LX('Fler byggnader', 'More buildings'),
+          text: LX('<b>Skattkammaren</b> höjer förrådets tak. <b>Ekonomicentrum</b> låter dig bygga ut guldgruvorna på kartan. I <b>kryptan</b> väcker du dina stupade som draugar (billiga trupper av liken).',
+            'The <b>treasury</b> raises your storage limit. The <b>economy centre</b> lets you upgrade the gold mines on the map. In the <b>crypt</b> you raise your fallen as draugs (cheap troops made from corpses).'),
+          hl: () => ['treasury', 'econ', 'crypt'].map(k => '#vscene .plot[data-plot="' + plotOf(k) + '"]'), go: () => { setTab('village'); ui.vsel = -1; updateVillage(); } },
+        { id: 'q12', ack: true, title: LX('Kartan', 'The map'),
+          text: LX('Kartan är en ö med rutor. Färgen visar vem som äger en ruta, och på neutrala rutor står <b>banditer</b>. Hur många trupper som står på en ruta ser du bara på dina rutor och grannarna till dem.',
+            'The map is an island of territories. The colour shows who owns a territory, and on neutral territories there are <b>bandits</b>. How many troops stand on a territory you only see on your territories and their neighbours.'),
+          go: () => viewTile(me().village) },
+        { id: 'q13', ack: true, title: LX('Anfall', 'Attacking'),
+          text: LX('Tryck på en ruta som gränsar till dina, välj trupper och tryck på <b>Anfall</b>. <b>Behövs</b> och <b>Säkert</b> föreslår hur många som räcker. Trupperna går alltid genom dina egna rutor, och efter striden går de till närmaste egna ruta, eller stannar om du kryssar i det.',
+            'Tap a territory next to yours, choose troops and tap <b>Attack</b>. <b>Needed</b> and <b>Safe</b> suggest how many are enough. Troops always march through your own territories, and after the battle they go to your nearest territory, or stay if you tick that box.'),
+          tile: nextNeutral, hl: () => ['#chipNeed', '#sendBtn'], go: () => goTile(nextNeutral())() },
+        { id: 'q14', ack: true, title: LX('Ockupera och bygg utpost', 'Occupy and build an outpost'),
+          text: LX('När du har dödat alla på en ruta är den <b>ockuperad</b> (randig). Den blir din först när du bygger en <b>utpost</b>. Utposten ger guld och grundförsvar, kan byggas ut och få mur och utkikstorn.',
+            'When you have killed everyone on a territory it is <b>occupied</b> (striped). It becomes yours only when you build an <b>outpost</b>. The outpost gives gold and base defence, and can be upgraded and get a wall and a lookout tower.'),
+          tile: () => S.tut.occ, hl: () => ['#buildBtn'], go: () => goTile(S.tut.occ)() },
+        { id: 'q15', ack: true, title: LX('Guldgruvor på kartan', 'Gold mines on the map'),
+          text: LX('Ungefär var femte ruta har en <b>guldgruva</b> som ger extra guld till den som äger rutan. Med ekonomicentrum kan du bygga ut den.',
+            'About one in five territories has a <b>gold mine</b> that gives extra gold to whoever owns it. With the economy centre you can upgrade it.'),
+          tile: () => S.tut.mine, go: () => viewTile(S.tut.mine) },
+        { id: 'q16', ack: true, title: LX('Flytta armé', 'Move army'),
+          text: LX('På varje ruta där du har trupper finns <b>Flytta armé</b> och <b>Kalla hem</b>. Så samlar du trupper där de behövs, till exempel vid gränsen mot en annan spelare.',
+            'Every territory where you have troops has <b>Move army</b> and <b>Recall</b>. That is how you gather troops where they are needed, for example at the border with another player.'),
+          tile: () => S.tut.front, hl: () => ['#fwdBtn', '#recallAll'], go: () => goTile(S.tut.front)() },
+        { id: 'q17', ack: true, title: LX('Kullen', 'The Hill'),
+          text: LX('<b>Kullen</b> ger 1 vinstpoäng i minuten. Den som tar den får +10 % i försvar där, men bonusen sjunker 2 procentenheter i minuten (lägst −50 %), så den blir svårare att hålla ju längre du har den. Kullen har ingen utpost: vinner du är den din direkt.',
+            'The <b>Hill</b> gives 1 victory point per minute. Whoever takes it gets +10% defence there, but the bonus falls 2 percentage points per minute (to −50% at most), so the longer you hold it, the harder it gets. The Hill has no outpost: if you win, it is yours at once.'),
+          tile: () => 0, go: () => viewTile(0) },
+        { id: 'q18', ack: true, title: LX('Andra spelare', 'Other players'),
+          text: LX('Andra spelares rutor tar du på samma sätt. <b>Byar</b> kan aldrig tas, bara plundras: vinner du bär trupperna hem guld, och <b>siegemen</b> sänker byggnader. Anfaller två spelare varandra samtidigt möts arméerna i ett <b>fältslag</b> på vägen.',
+            'You take other players’ territories the same way. <b>Villages</b> can never be taken, only raided: if you win, your troops carry gold home, and <b>siegemen</b> lower buildings. If two players attack each other at the same time, the armies meet in a <b>field battle</b> on the way.'),
+          tile: () => S.tut.enemy, go: () => viewTile(S.tut.enemy) },
+        { id: 'q19', ack: true, title: LX('Så fungerar strider', 'How battles work'),
+          text: LX('Anfallspoäng är antal trupper gånger anfall. Försvarspoäng är antal gånger försvar, plus grundförsvar. Bonusar från verkstaden, färdigheter, murar och kullen läggs på. Den starkare sidan får sin <b>överlägsenhet</b> (skillnaden) dubblad och förlorar sedan andelen motståndarens poäng delat med de egna. Den svagare sidan förlorar alla. Exempel: 10 mot 5 blir 15 mot 5, så anfallaren förlorar en tredjedel. Här är försvaret vid gränsen.',
+            'Attack points are troops times attack. Defence points are troops times defence, plus base defence. Bonuses from the workshop, skills, walls and the Hill are added. The stronger side gets its <b>superiority</b> (the difference) doubled and then loses the share of the opponent’s points divided by its own. The weaker side loses everyone. Example: 10 against 5 becomes 15 against 5, so the attacker loses a third. Here is the defence at the border.'),
+          hl: () => [repAt(S.tut.front)], go: goTab('reports') },
+        { id: 'q20', ack: true, title: LX('Rapporter', 'Reports'),
+          text: LX('Alla strider hamnar i <b>Rapporter</b>, tillsammans med besked om byggen, träning och nivåer. Filtret visar dina anfall, dina försvar eller båda.',
+            'Every battle ends up in <b>Reports</b>, along with news about buildings, training and levels. The filter shows your attacks, your defences or both.'),
+          hl: () => ['.rep-filter', repAt(S.tut.occ)], go: goTab('reports') },
+        { id: 'q21', ack: true, title: LX('Färdigheter', 'Skills'),
+          text: LX('Tre träd: anfall, försvar och ekonomi. Tryck på en färdighet för att läsa om den. Nivå 2 i ett träd kräver 3 poäng i trädet och nivå 3 kräver 6, så tänk på vilket träd du satsar på.',
+            'Three trees: attack, defence and economy. Tap a skill to read about it. Tier 2 in a tree needs 3 points in that tree and tier 3 needs 6, so choose which tree to invest in.'),
+          hl: () => ['.talents'], go: goTab('skills') },
+        { id: 'q22', ack: true, title: LX('Rivalerna', 'The rivals'),
+          text: LX('Rivalerna spelar efter samma regler som du, dimman inräknad. De tar rutor, anfaller svaga gränser och slåss om kullen. Ha alltid några trupper kvar på gränsen och i byn. Lycka till!',
+            'The rivals play by the same rules as you, fog included. They take territories, attack weak borders and fight for the Hill. Always keep some troops at the border and in the village. Good luck!'),
+          go: () => viewTile(me().village) },
+      ] },
+    1: { name: LX('Grunderna', 'The basics'), desc: LX('Guldgruva, barrack, soldater, anfall och utposter. Inga fiender.', 'Gold mine, barracks, soldiers, attacks and outposts. No enemies.'),
+      done: LX('Du kan grunderna: guldgruvan ger guld, barracken tränar trupper, du anfaller neutrala rutor och gör dem till dina med utposter.', 'You know the basics: the gold mine gives gold, the barracks train troops, you attack neutral territories and make them yours with outposts.'),
+      missions: [
+        { id: 'gm', title: LX('Uppgradera guldgruvan', 'Upgrade the gold mine'),
+          text: LX('Guldgruvan i byn ger guld varje minut, och guld behövs till allt. Tryck på <b>guldgruvan</b> i byn och sedan på <b>Bygg ut</b>. Nivå 2 ger 11 guld i minuten i stället för 8. Den blå rutan <b>ROI</b> visar hur snabbt en uppgradering betalar sig.',
+            'The gold mine in your village gives gold every minute, and you need gold for everything. Tap the <b>gold mine</b> in the village and then <b>Upgrade</b>. Level 2 gives 11 gold per minute instead of 8. The blue <b>ROI</b> box shows how fast an upgrade pays for itself.'),
+          check: () => TW().buildings.goldmine >= 2, hl: () => ['#vscene .plot[data-plot="0"]', '#ledger .bld[data-b="goldmine"] [data-act=upgrade]', '.tab[data-tab=village]'], go: goPlot('goldmine') },
+        { id: 'bar', title: LX('Bygg en barrack', 'Build barracks'),
+          text: LX('Barracken tränar trupper. Tryck på en <b>ledig tomt</b> (med ett +) i byn och välj <b>Barrack</b>.', 'The barracks train troops. Tap an <b>empty plot</b> (with a +) in the village and choose <b>Barracks</b>.'),
+          check: () => TW().buildings.barracks >= 1, hl: hlBuild('barracks'), go: goBuild('barracks') },
+        { id: 'sol', title: LX('Träna 3 soldater', 'Train 3 soldiers'),
+          text: LX('Öppna fliken <b>Trupper</b>, välj 3 och tryck på <b>Träna</b>. En soldat kostar 10 guld och har 1 i anfall och 1 i försvar. Soldaterna tränas en i taget och står sedan hemma i byn.',
+            'Open the <b>Troops</b> tab, choose 3 and tap <b>Train</b>. A soldier costs 10 gold and has 1 attack and 1 defence. They are trained one at a time and then wait at home in the village.'),
+          check: () => army('soldier') >= 3, hl: () => ['.tab[data-tab=troops]', '#trainBtn'], go: goTab('troops') },
+        { id: 'atk', title: LX('Anfall rutan med 1 bandit', 'Attack the territory with 1 bandit'),
+          text: LX('Rutorna runt byn har neutrala banditer. Öppna <b>kartan</b> och tryck på den markerade rutan. Välj dina soldater och tryck på <b>Anfall</b>. Med 3 soldater mot 1 bandit vinner du, och varje bandit du dödar ger 5 guld.',
+            'The territories around your village have neutral bandits. Open the <b>map</b> and tap the highlighted territory. Choose your soldiers and tap <b>Attack</b>. With 3 soldiers against 1 bandit you win, and every bandit you kill gives 5 gold.'),
+          check: () => ownsT(S.tut.target), tile: () => S.tut.target, hl: () => ['.tab[data-tab=map]', '#sendBtn'], go: () => goTile(S.tut.target)() },
+        { id: 'post', title: LX('Bygg en utpost', 'Build an outpost'),
+          text: LX('Rutan blir din först när du bygger en <b>utpost</b> där. Tryck på rutan och på <b>Bygg utpost</b> (5 guld). Dina överlevande soldater har gått hem till närmaste egna ruta, men du kan bygga ändå. Utposten ger guld, försvar och vinstpoäng.',
+            'The territory becomes yours when you build an <b>outpost</b> there. Tap it and then <b>Build outpost</b> (5 gold). Your surviving soldiers went back to your nearest territory, but you can still build. The outpost gives gold, defence and victory points.'),
+          check: () => S.tiles[S.tut.target].owner === ME, tile: () => S.tut.target, hl: () => ['#buildBtn', '.tab[data-tab=map]'], go: () => goTile(S.tut.target)() },
+        { id: 'post2', title: LX('Bygg ut utposten till nivå 2', 'Upgrade the outpost to level 2'),
+          text: LX('Varje nivå i utposten ger 1 guld i minuten till och +1 i grundförsvar. Tryck på rutan och på <b>Utpost nivå 2</b>.', 'Each outpost level gives 1 more gold per minute and +1 base defence. Tap the territory and <b>Outpost level 2</b>.'),
+          check: () => { const t = S.tiles[S.tut.target]; return t.owner === ME && t.post && t.post.lvl >= 2; }, tile: () => S.tut.target, hl: () => ['#postUpBtn', '.tab[data-tab=map]'], go: () => goTile(S.tut.target)() },
+      ] },
+    2: { name: LX('Forskning och expansion', 'Research and expansion'), desc: LX('Forskningscentret, berserkers, fler rutor och Flytta armé.', 'The research centre, berserkers, more territories and Move army.'),
+      done: LX('Nu kan du låsa upp nya trupper, ta fler rutor och flytta din armé dit den behövs.', 'Now you can unlock new troops, take more territories and move your army where it is needed.'),
+      missions: [
+        { id: 'lab', title: LX('Bygg forskningscentret', 'Build the research centre'),
+          text: LX('I forskningscentret låser du upp nya trupptyper. Bygg det på en <b>ledig tomt</b> i byn.', 'In the research centre you unlock new troop types. Build it on an <b>empty plot</b> in the village.'),
+          check: () => TW().buildings.lab >= 1, hl: hlBuild('lab'), go: goBuild('lab') },
+        { id: 'unl', title: LX('Lås upp berserkers', 'Unlock berserkers'),
+          text: LX('Tryck på forskningscentret och på <b>Lås upp</b> vid Berserker. Berserkers har 1,5 i anfall men bara 0,3 i försvar: bra att anfalla med, dåliga att försvara med.', 'Tap the research centre and <b>Unlock</b> next to Berserker. Berserkers have 1.5 attack but only 0.3 defence: good for attacking, poor for defending.'),
+          check: () => !!TW().unlocked.berserker, hl: () => ['#vscene .plot[data-plot="' + plotOf('lab') + '"]', '#lab-berserker-btn', '.tab[data-tab=village]'], go: goPlot('lab') },
+        { id: 'ber', title: LX('Träna 5 berserkers', 'Train 5 berserkers'),
+          text: LX('Öppna <b>Trupper</b>, välj <b>Berserker</b> och träna 5. De kostar 12 guld styck.', 'Open <b>Troops</b>, choose <b>Berserker</b> and train 5. They cost 12 gold each.'),
+          check: () => army('berserker') >= 5, hl: () => ['.tab[data-tab=troops]', '[data-act=tkind][data-unit=berserker]', '#trainBtn'], go: goTab('troops') },
+        { id: 'exp', title: LX('Expandera till 5 rutor', 'Expand to 5 territories'),
+          text: LX('Fler rutor ger mer guld och fler vinstpoäng. Anfall neutrala rutor som gränsar till dina och bygg utposter på dem. Tryck på <b>Behövs</b> för att välja lagom många trupper. Efter ett anfall går trupperna till din närmaste ruta.',
+            'More territories give more gold and more victory points. Attack neutral territories next to yours and build outposts on them. Tap <b>Needed</b> to pick the right number of troops. After an attack the troops go to your nearest territory.'),
+          check: () => E.countControlled(S, ME) >= 5, tile: nextNeutral, hl: () => ['.tab[data-tab=map]', '#chipNeed', '#sendBtn', '#buildBtn'], go: () => goTile(nextNeutral())(), prog: () => E.countControlled(S, ME) + '/5' },
+        { id: 'mov', title: LX('Flytta din armé', 'Move your army'),
+          text: LX('Tryck på en ruta där du har trupper och på <b>Flytta armé</b>. Välj en annan av dina rutor som mål och tryck på Skicka. Så samlar du trupper där de behövs, till exempel vid gränsen.',
+            'Tap a territory where you have troops and then <b>Move army</b>. Choose another of your territories as the target and tap Send. That is how you gather troops where they are needed, for example at the border.'),
+          check: () => !!S.tut.moved, tile: () => { const v = me().village; return S.tiles.findIndex(t => t.owner === ME && t.type === 'land' && t.adj.includes(v)); }, hl: () => ['#fwdBtn', '#fwdSend', '.tab[data-tab=map]'], go: () => goTile(me().village)() },
+        { id: 'see', title: LX('Dina grannar', 'Your neighbours'), ack: true,
+          text: LX('De andra byarna på kartan tillhör andra spelare. Du ser alltid vem som äger en ruta, men hur många trupper som står där ser du bara på dina rutor och rutorna bredvid. De här grannarna är passiva, så du behöver inte anfalla dem nu.',
+            'The other villages on the map belong to other players. You always see who owns a territory, but how many troops stand there you only see on your territories and the ones next to them. These neighbours are passive, so you do not need to attack them now.'),
+          tile: () => S.players.p2 ? S.players.p2.village : -1, go: () => { if (S.players.p2) { setTab('map'); centerOn(S.players.p2.village); } } },
+      ] },
+    3: { name: LX('Vinstpoäng och kullen', 'Victory points and the Hill'), desc: LX('Ta en annan spelares guldgruva och sedan kullen i mitten.', 'Take another player’s gold mine and then the Hill in the middle.'),
+      done: LX('Du vet hur man vinner: rutor och framför allt kullen ger vinstpoäng. Först till poängmålet vinner.', 'You know how to win: territories and above all the Hill give victory points. First to the target wins.'),
+      missions: [
+        { id: 'vp', title: LX('Så vinner man', 'How to win'), ack: true,
+          text: LX('Varje ruta du kontrollerar ger 1 <b>vinstpoäng</b> var tionde minut, och <b>kullen</b> i mitten ger 1 vinstpoäng i minuten. Den som först når 100 vinner. Tryck på vinstpoängen uppe till höger för att se ställningen.',
+            'Every territory you control gives 1 <b>victory point</b> every ten minutes, and the <b>Hill</b> in the middle gives 1 victory point per minute. The first to 100 wins. Tap the victory points at the top right to see the standings.'),
+          hl: () => ['#st-vp'], go: () => openStand() },
+        { id: 'b8', title: LX('Träna 8 berserkers', 'Train 8 berserkers'),
+          text: LX('Du har 4 berserkers. Träna fler tills du har 8.', 'You have 4 berserkers. Train more until you have 8.'),
+          check: () => army('berserker') >= 8, hl: () => ['.tab[data-tab=troops]', '[data-act=tkind][data-unit=berserker]', '#trainBtn'], go: goTab('troops'), prog: () => army('berserker') + '/8' },
+        { id: 'mine', title: LX('Anfall guldgruvan', 'Attack the gold mine'),
+          text: () => LX(esc(nameOf2('p2')) + ' har en <b>guldgruva</b> bredvid dina rutor, med 4 soldater och en utpost. Anfall den med dina berserkers. Fiendens utpost ger +1 i grundförsvar, och när du vinner förstörs den och du får halva dess värde i guld.',
+            esc(nameOf2('p2')) + ' has a <b>gold mine</b> next to your territories, with 4 soldiers and an outpost. Attack it with your berserkers. The enemy outpost gives +1 base defence, and when you win it is destroyed and you get half its value in gold.'),
+          check: () => ownsT(S.tut.mine), tile: () => S.tut.mine, hl: () => ['.tab[data-tab=map]', '#sendBtn'], go: () => goTile(S.tut.mine)() },
+        { id: 'mine2', title: LX('Ta kontroll över guldgruvan', 'Take control of the gold mine'),
+          text: LX('Bygg en utpost på rutan. Då får du gruvans guld varje minut och dess vinstpoäng.', 'Build an outpost on the territory. Then you get the mine’s gold every minute and its victory points.'),
+          check: () => S.tiles[S.tut.mine].owner === ME, tile: () => S.tut.mine, hl: () => ['#buildBtn', '.tab[data-tab=map]'], go: () => goTile(S.tut.mine)() },
+        { id: 'spd', title: LX('Öka tempot', 'Speed up'),
+          text: LX('Nu ska du träna fler berserkers. Medan du väntar kan du öka hastigheten: tryck på <b>+</b> bredvid klockan uppe till höger tills det står 2×. Du kan sänka den igen när du vill.',
+            'Now you will train more berserkers. While you wait you can speed up the game: tap <b>+</b> next to the clock at the top right until it says 2×. You can lower it again whenever you like.'),
+          check: () => speed >= 2, hl: () => ['#speedUp'] },
+        { id: 'b12', title: LX('Träna 12 berserkers', 'Train 12 berserkers'),
+          text: LX('Kullen har 6 banditer. Träna berserkers tills du har 12.', 'The Hill has 6 bandits. Train berserkers until you have 12.'),
+          check: () => army('berserker') >= 12, hl: () => ['.tab[data-tab=troops]', '[data-act=tkind][data-unit=berserker]', '#trainBtn'], go: goTab('troops'), prog: () => army('berserker') + '/12' },
+        { id: 'hill', title: LX('Ta kullen', 'Take the Hill'),
+          text: LX('Kullen ger 1 vinstpoäng i minuten, tio gånger mer än en vanlig ruta. Samla dina berserkers och anfall den från din ruta bredvid kullen. Kullen har ingen utpost: vinner du är den din direkt.',
+            'The Hill gives 1 victory point per minute, ten times more than an ordinary territory. Gather your berserkers and attack it from your territory next to the Hill. The Hill has no outpost: if you win, it is yours at once.'),
+          check: () => S.tiles[0].owner === ME, tile: () => 0, hl: () => ['.tab[data-tab=map]', '#sendBtn', '#chipNeed'], go: () => goTile(0)() },
+      ] },
+    4: { name: LX('Försvara kullen', 'Defend the Hill'), desc: LX('Sköldgrabbar, verkstaden och ett anfall om 20 minuter.', 'Shieldbearers, the workshop and an attack in 20 minutes.'),
+      done: LX('Kullen höll. Sköldgrabbar, mur och verkstadens förbättringar gör ett försvar starkt, och rapporten visar exakt varför striden slutade som den gjorde.', 'The Hill held. Shieldbearers, walls and workshop upgrades make a strong defence, and the report shows exactly why the battle ended as it did.'),
+      timer: true,
+      missions: [
+        { id: 'intro', title: LX('Ett anfall är på väg', 'An attack is coming'), ack: true,
+          text: () => LX('Du håller kullen, men ' + esc(nameOf2('p2')) + ' samlar trupper på den markerade rutan och anfaller om 20 minuter. Kullens försvarsbonus är +10 % när du tar den och sjunker 2 procentenheter i minuten. När anfallet kommer är den −30 %, så du behöver ett starkt försvar.',
+            'You hold the Hill, but ' + esc(nameOf2('p2')) + ' is gathering troops on the highlighted territory and will attack in 20 minutes. The Hill’s defence bonus is +10% when you take it and falls 2 percentage points per minute. When the attack comes it is −30%, so you need a strong defence.'),
+          tile: () => S.tut.stage, go: () => goTile(S.tut.stage)() },
+        { id: 'bar3', title: LX('Bygg ut barracken till nivå 3', 'Upgrade the barracks to level 3'),
+          text: LX('En större barrack tränar snabbare: 20 % kortare tid per nivå.', 'Bigger barracks train faster: 20% less time per level.'),
+          check: () => TW().buildings.barracks >= 3, hl: hlBuild('barracks'), go: goPlot('barracks'), prog: () => TW().buildings.barracks + '/3' },
+        { id: 'lab2', title: LX('Forskningscentret nivå 2', 'Research centre level 2'),
+          text: LX('Sköldgrabbar kräver forskningscentret på nivå 2. Bygg ut det.', 'Shieldbearers need the research centre at level 2. Upgrade it.'),
+          check: () => TW().buildings.lab >= 2, hl: hlBuild('lab'), go: goPlot('lab') },
+        { id: 'unlS', title: LX('Lås upp sköldgrabbar', 'Unlock shieldbearers'),
+          text: LX('Sköldgrabbar har 1,5 i försvar men bara 0,5 i anfall: de bästa försvararna. Lås upp dem i forskningscentret.', 'Shieldbearers have 1.5 defence but only 0.5 attack: the best defenders. Unlock them in the research centre.'),
+          check: () => !!TW().unlocked.shield, hl: () => ['#vscene .plot[data-plot="' + plotOf('lab') + '"]', '#lab-shield-btn', '.tab[data-tab=village]'], go: goPlot('lab') },
+        { id: 'ws2', title: LX('Bygg verkstaden till nivå 2', 'Build the workshop to level 2'),
+          text: LX('I <b>verkstaden</b> förbättrar du dina trupper, en nivå i taget upp till verkstadens nivå. Här går förbättringarna extra fort.', 'In the <b>workshop</b> you upgrade your troops, one level at a time up to the workshop’s level. Here the upgrades are extra fast.'),
+          check: () => TW().buildings.workshop >= 2, hl: hlBuild('workshop'), go: goBuild('workshop'), prog: () => TW().buildings.workshop + '/2' },
+        { id: 'def2', title: LX('Förbättra försvar till nivå 2', 'Upgrade defence to level 2'),
+          text: LX('Tryck på verkstaden och på <b>Försvar</b>. Varje nivå ger +6 % försvar för alla dina trupper. Förbättringar kan läggas i kö.', 'Tap the workshop and <b>Defence</b>. Each level gives +6% defence for all your troops. Upgrades can be queued.'),
+          check: () => (me().up.defense || 0) >= 2, hl: () => ['#vscene .plot[data-plot="' + plotOf('workshop') + '"]', '#res-defense-btn', '.tab[data-tab=village]'], go: goPlot('workshop'), prog: () => (me().up.defense || 0) + '/2' },
+        { id: 'sh2', title: LX('Förbättra sköldgrabbar till nivå 2', 'Upgrade shieldbearers to level 2'),
+          text: LX('En förbättring av en trupptyp ger +6 % i både anfall och försvar för just den typen.', 'Upgrading a troop type gives +6% attack and defence for that type.'),
+          check: () => (me().up.shield || 0) >= 2, hl: () => ['#vscene .plot[data-plot="' + plotOf('workshop') + '"]', '#res-shield-btn', '.tab[data-tab=village]'], go: goPlot('workshop'), prog: () => (me().up.shield || 0) + '/2' },
+        { id: 's20', title: LX('Träna 20 sköldgrabbar', 'Train 20 shieldbearers'),
+          text: LX('Träna sköldgrabbar i barracken tills du har 20. Öka gärna tempot medan du väntar.', 'Train shieldbearers in the barracks until you have 20. Feel free to speed up while you wait.'),
+          check: () => army('shield') >= 20, hl: () => ['.tab[data-tab=troops]', '[data-act=tkind][data-unit=shield]', '#trainBtn'], go: goTab('troops'), prog: () => army('shield') + '/20' },
+        { id: 'mv', title: LX('Flytta sköldgrabbarna till kullen', 'Move the shieldbearers to the Hill'),
+          text: LX('Tryck på din by på kartan, välj <b>Flytta armé</b> och kullen som mål (eller tryck på kullen och använd Förstärk).', 'Tap your village on the map, choose <b>Move army</b> and the Hill as the target (or tap the Hill and use Reinforce).'),
+          check: () => (S.tiles[0].u.shield || 0) >= 20, tile: () => 0, hl: () => ['#fwdBtn', '#fwdSend', '#sendBtn', '.tab[data-tab=map]'], go: () => goTile(me().village)(), prog: () => (S.tiles[0].u.shield || 0) + '/20' },
+        { id: 'hold', title: LX('Håll kullen', 'Hold the Hill'),
+          text: LX('Nu väntar du på anfallet. Du ser fiendens trupper på rutan bredvid kullen. Vill du kan du öka tempot.', 'Now wait for the attack. You can see the enemy troops on the territory next to the Hill. You can speed up if you like.'),
+          check: () => !!S.tut.held, tile: () => 0, go: () => goTile(0)() },
+        { id: 'rep', title: LX('Läs rapporten', 'Read the report'), ack: true,
+          text: LX('Öppna <b>Rapporter</b> och titta på striden om kullen. Till vänster står anfallet och till höger ditt försvar. Poängen är antal trupper gånger anfall eller försvar, med bonusar och avdrag från verkstaden, färdigheter och kullen. Den starkare sidan får sin <b>överlägsenhet</b> (skillnaden) dubblad och förlorar sedan andelen motståndarens poäng delat med de egna. Den svagare sidan förlorar alla. Därför förlorar även vinnaren trupper.',
+            'Open <b>Reports</b> and look at the battle for the Hill. The attack is on the left and your defence on the right. The points are troops times attack or defence, with bonuses and penalties from the workshop, skills and the Hill. The stronger side gets its <b>superiority</b> (the difference) doubled and then loses the share of the opponent’s points divided by its own. The weaker side loses everything. That is why even the winner loses troops.'),
+          hl: () => ['.tab[data-tab=reports]', repAt(0)], go: goTab('reports') },
+      ] },
+    5: { name: LX('Belägring', 'Siege'), desc: LX('Siegemen och plundring av en annan spelares by.', 'Siegemen and raiding another player’s village.'),
+      done: LX('Byar kan aldrig tas, men de kan plundras, och siegemen slår sönder byggnaderna. Kom ihåg att dina egna byggnader kan sänkas på samma sätt: bygg mur.', 'Villages can never be taken, but they can be raided, and siegemen smash the buildings. Remember that your own buildings can be lowered the same way: build a wall.'),
+      missions: [
+        { id: 'lab3', title: LX('Forskningscentret nivå 3', 'Research centre level 3'),
+          text: LX('Siegemen kräver forskningscentret på nivå 3.', 'Siegemen need the research centre at level 3.'),
+          check: () => TW().buildings.lab >= 3, hl: hlBuild('lab'), go: goPlot('lab') },
+        { id: 'unlSg', title: LX('Lås upp siegemen', 'Unlock siegemen'),
+          text: LX('<b>Siegemen</b> slår sönder byggnader: för varje siegeman som överlever ett vunnet anfall mot en by sänks byns högsta byggnad en nivå. Ett anfall med siegemen mot en by går i halv fart.',
+            '<b>Siegemen</b> smash buildings: for each siegeman that survives a won attack on a village, the village’s highest building drops one level. An attack with siegemen on a village moves at half speed.'),
+          check: () => !!TW().unlocked.siege, hl: () => ['#vscene .plot[data-plot="' + plotOf('lab') + '"]', '#lab-siege-btn', '.tab[data-tab=village]'], go: goPlot('lab') },
+        { id: 'sg4', title: LX('Träna 4 siegemen', 'Train 4 siegemen'),
+          text: LX('Siegemen kostar 30 guld styck. Fyra räcker: några kan stupa i striden.', 'Siegemen cost 30 gold each. Four is enough: some may fall in battle.'),
+          check: () => army('siege') >= 4 || sumDrop() >= 3, hl: () => ['.tab[data-tab=troops]', '[data-act=tkind][data-unit=siege]', '#trainBtn'], go: goTab('troops'), prog: () => army('siege') + '/4' },
+        { id: 'stage', title: () => LX('Samla armén bredvid ' + esc(nameOf2('p2')) + 's by', 'Gather the army next to ' + esc(nameOf2('p2')) + '’s village'),
+          text: LX('Tryck på din by, välj <b>Flytta armé</b> och skicka siegemännen och berserkers till den markerade rutan bredvid fiendens by. Därifrån går anfallet fort, och du ser försvararna.',
+            'Tap your village, choose <b>Move army</b> and send the siegemen and berserkers to the highlighted territory next to the enemy village. From there the attack is quick, and you can see the defenders.'),
+          check: () => (S.tiles[S.tut.stage].u.siege || 0) >= 3 || sumDrop() > 0, tile: () => S.tut.stage, hl: () => ['#fwdBtn', '#fwdSend', '.tab[data-tab=map]'], go: () => goTile(me().village)() },
+        { id: 'raid', title: LX('Anfall byn och sänk 3 nivåer', 'Attack the village and lower 3 levels'),
+          text: LX('Tryck på fiendens by och anfall med siegemännen och berserkers. Byn har en mur och några försvarare. Vinner du bär dina trupper hem guld, och siegemännen sänker byggnader. Mål: sänk byggnader totalt 3 nivåer.',
+            'Tap the enemy village and attack with the siegemen and berserkers. The village has a wall and some defenders. If you win, your troops carry gold home and the siegemen lower buildings. Goal: lower buildings by 3 levels in total.'),
+          check: () => sumDrop() >= 3, tile: () => S.tut.enemy, hl: () => ['#sendBtn', '.tab[data-tab=map]'], go: () => goTile(S.tut.enemy)(), prog: () => Math.min(3, sumDrop()) + '/3' },
+        { id: 'rep5', title: LX('Plundringsrapporten', 'The raid report'), ack: true,
+          text: LX('Öppna <b>Rapporter</b>. Rapporten visar striden, hur mycket guld dina trupper bär hem och vilken byggnad siegemännen sänkte. Guldet läggs i ditt förråd när trupperna kommer fram.',
+            'Open <b>Reports</b>. The report shows the battle, how much gold your troops carry home and which building the siegemen lowered. The gold goes into your storage when the troops arrive.'),
+          hl: () => ['.tab[data-tab=reports]', repAt(S.tut.enemy)], go: goTab('reports') },
+      ] },
+    6: { name: LX('Första matchen', 'First match'), desc: LX('Mot två normala bottar från början. Först till 50 vinstpoäng.', 'Against two normal bots from scratch. First to 50 victory points.'), win: true,
+      done: LX('Du vann din första match! Nu är du redo för de svåra bottarna.', 'You won your first match! Now you are ready for the hard bots.'),
+      missions: [
+        { id: 'g3', title: LX('Bygg ut guldgruvan till nivå 3', 'Upgrade the gold mine to level 3'),
+          text: LX('Nu börjar du från början mot två bottar som också vill vinna. Guld först: bygg ut guldgruvan.', 'Now you start from scratch against two bots that also want to win. Gold first: upgrade the gold mine.'),
+          check: () => TW().buildings.goldmine >= 3, hl: () => ['#vscene .plot[data-plot="0"]', '#ledger .bld[data-b="goldmine"] [data-act=upgrade]'], go: goPlot('goldmine'), prog: () => TW().buildings.goldmine + '/3' },
+        { id: 'army5', title: LX('Barrack och 5 soldater', 'Barracks and 5 soldiers'),
+          text: LX('Bygg en barrack och träna minst 5 soldater, så att du kan börja ta rutor.', 'Build barracks and train at least 5 soldiers so you can start taking territories.'),
+          check: () => TW().buildings.barracks >= 1 && E.soldierCount(S, me()) >= 5, hl: hlBuild('barracks'), go: goBuild('barracks') },
+        { id: 'c6', title: LX('Kontrollera 6 rutor', 'Control 6 territories'),
+          text: LX('Ta neutrala rutor runt byn och bygg utposter. Bottarna gör samma sak, så var snabb.', 'Take neutral territories around your village and build outposts. The bots do the same, so be quick.'),
+          check: () => E.countControlled(S, ME) >= 6, tile: nextNeutral, go: () => goTile(nextNeutral())(), prog: () => E.countControlled(S, ME) + '/6' },
+        { id: 'unlB', title: LX('Lås upp berserkers', 'Unlock berserkers'),
+          text: LX('Bygg forskningscentret och lås upp berserkers för starkare anfall.', 'Build the research centre and unlock berserkers for stronger attacks.'),
+          check: () => !!TW().unlocked.berserker, hl: hlBuild('lab'), go: goBuild('lab') },
+        { id: 'a20', title: LX('Ha en armé på 20 trupper', 'Have an army of 20 troops'),
+          text: LX('Bottarna anfaller gränsrutor som är svagt försvarade. Låt några trupper stå kvar på gränsen och ha en armé att anfalla med.', 'The bots attack border territories that are weakly defended. Keep some troops at the border and an army to attack with.'),
+          check: () => E.soldierCount(S, me()) >= 20, hl: () => ['.tab[data-tab=troops]', '#trainBtn'], go: goTab('troops'), prog: () => E.soldierCount(S, me()) + '/20' },
+        { id: 'h6', title: LX('Ta kullen', 'Take the Hill'),
+          text: LX('Kullen ger 1 vinstpoäng i minuten. Ta den när du har en ruta bredvid och tillräckligt många trupper, och låt några stanna kvar för att försvara den.', 'The Hill gives 1 victory point per minute. Take it when you have a territory next to it and enough troops, and let some stay to defend it.'),
+          check: () => S.tiles[0].owner === ME || !!S.tut.hadHill, tile: () => 0, go: () => goTile(0)() },
+        { id: 'w50', title: LX('Vinn: först till 50 vinstpoäng', 'Win: first to 50 victory points'),
+          text: LX('Håll dina rutor och kullen så länge som möjligt. Tryck på vinstpoängen uppe till höger för att se hur nära bottarna är.', 'Hold your territories and the Hill as long as you can. Tap the victory points at the top right to see how close the bots are.'),
+          check: () => S.winner === ME, hl: () => ['#st-vp'] },
+      ] },
+    7: { name: LX('Mästarprovet', 'The master test'), desc: LX('Mot två svåra bottar. Först till 100 vinstpoäng.', 'Against two hard bots. First to 100 victory points.'), win: true,
+      done: LX('Du slog två svåra bottar. Du kan allt som behövs för att vinna. Lycka till online!', 'You beat two hard bots. You know everything you need to win. Good luck online!'),
+      missions: [
+        { id: 't1', title: LX('Tips: snabb start', 'Tip: a fast start'), ack: true,
+          text: LX('Svåra bottar expanderar snabbt, anfaller tidigt och får 30 % mer guld. Bygg barrack direkt och ta rutorna närmast byn innan de gör det.', 'Hard bots expand quickly, attack early and get 30% more gold. Build barracks right away and take the territories nearest your village before they do.') },
+        { id: 't2', title: LX('Tips: försvara gränsen', 'Tip: defend the border'), ack: true,
+          text: LX('Bygg mur i byn och bygg ut utposterna vid gränsen: muren ger procent på försvaret och utposten grundförsvar. Låt alltid några trupper stå kvar som vakt, särskilt sköldgrabbar.', 'Build a wall in the village and upgrade the outposts at the border: the wall adds percent to defence and the outpost base defence. Always keep some troops as guards, especially shieldbearers.') },
+        { id: 't3', title: LX('Tips: verkstad och färdigheter', 'Tip: workshop and skills'), ack: true,
+          text: LX('Använd verkstaden och dina färdighetspoäng. Blodtörst och Hårdhudad gör alla dina trupper starkare, och Guldpost och Gruvdrift ger mer guld.', 'Use the workshop and your skill points. Bloodlust and Thick Skin make all your troops stronger, and Gold Post and Mining give more gold.'),
+          hl: () => ['.tab[data-tab=skills]', '#lvlchip'] },
+        { id: 't4', title: LX('Tips: kullen', 'Tip: the Hill'), ack: true,
+          text: LX('Ta kullen först när du kan hålla den. Bonusen sjunker med tiden och bottarna samlar trupper för att ta den. Anfaller två spelare varandra samtidigt möts arméerna i ett fältslag.', 'Take the Hill only when you can hold it. Its bonus falls over time and the bots gather troops to take it. If two players attack each other at the same time, the armies meet in a field battle.') },
+        { id: 'w100', title: LX('Vinn: först till 100 vinstpoäng', 'Win: first to 100 victory points'),
+          text: LX('Lycka till! Tryck på vinstpoängen uppe till höger för att följa ställningen.', 'Good luck! Tap the victory points at the top right to follow the standings.'),
+          check: () => S.winner === ME, hl: () => ['#st-vp'] },
+      ] },
+  };
+  const tutTxt = x => typeof x === 'function' ? x() : x;
+  const tutDoneSet = () => new Set(store.get(TDONE_KEY) || []);
+  function tutCur() {
+    if (!S || !S.tut) return null;
+    const L = TUTS[S.tut.level], done = new Set(S.tut.done);
+    return L.missions.find(m => !done.has(m.id)) || null;
+  }
+  // Startskärmen: banorna och "Fortsätt".
+  function renderTutPane() {
+    const done = tutDoneSet(), ts = store.get(TSAVE_KEY);
+    const ok = ts && E.isValidSave(ts.state) && ts.state.tut && !ts.state.winner;
+    $('tutCont').hidden = !ok;
+    if (ok) {
+      const L = TUTS[ts.state.tut.level];
+      setText($('tutContBtn'), L.tour ? LX('Fortsätt snabbtutorialen', 'Continue the quick tutorial') : LX('Fortsätt bana ', 'Continue level ') + ts.state.tut.level + ': ' + L.name);
+      setText($('tutContInfo'), (L.tour ? LX('Steg ', 'Step ') : LX('Uppdrag ', 'Mission ')) + Math.min(L.missions.length, ts.state.tut.done.length + 1) + LX(' av ', ' of ') + L.missions.length + ' · ' + clock(ts.state.time));
+    }
+    const next = [1, 2, 3, 4, 5, 6, 7].find(n => !done.has(n)) || 1;
+    const Q = TUTS[0], qd = done.has(0);
+    $('tutQuick').innerHTML = '<div class="tut-level quick' + (qd ? ' done' : '') + '"><span class="tl-n">' + (qd ? '✓' : icon('s-blitz')) + '</span>' +
+      '<div class="tl-t"><b>' + Q.name + '</b><small>' + Q.desc + '</small></div>' +
+      '<button class="btn" type="button" data-act="tut-play" data-level="0">' + (qd ? LX('Visa igen', 'Show again') : LX('Starta', 'Start')) + '</button></div>';
+    $('tutLevels').innerHTML = [1, 2, 3, 4, 5, 6, 7].map(n => {
+      const L = TUTS[n], d = done.has(n);
+      return '<div class="tut-level' + (d ? ' done' : '') + (n === next ? ' next' : '') + '"><span class="tl-n">' + (d ? '✓' : n) + '</span>' +
+        '<div class="tl-t"><b>' + LX('Bana ', 'Level ') + n + ': ' + L.name + '</b><small>' + L.desc + '</small></div>' +
+        '<button class="btn' + (n === next && !ok ? ' primary' : '') + '" type="button" data-act="tut-play" data-level="' + n + '">' + (d ? LX('Spela igen', 'Replay') : LX('Spela', 'Play')) + '</button></div>';
+    }).join('');
+  }
+  function tutStart(n) {
+    const name = ($('vnameInput').value || '').trim().slice(0, 24) || TR('Nybygget');
+    store.del(TSAVE_KEY);
+    beginGame(E.createGame({ tutorial: n, villageName: name, avatar: myAvatar() }), 1, 0);
+    ui.tutOpen = true; ui.tutSig = '';
+    setTab('village');
+    const m0 = tutCur(); if (m0 && m0.tile && cam.w) { const i = m0.tile(); if (i >= 0) centerOn(i); }
+    save();
+  }
+  // Varje uppdatering: bocka av klara uppdrag, skripten (anfallet i bana 4), kortet och markeringarna.
+  function tutTick() {
+    const box = $('tut');
+    if (!S || !S.tut || !running) { if (!box.hidden) { box.hidden = true; tutHL([]); } return; }
+    box.hidden = false;
+    const L = TUTS[S.tut.level];
+    if (S.tiles[0].owner === ME) S.tut.hadHill = true;
+    // Bana 4: anfallet mot kullen efter 20 minuter (skickas av den passiva grannen).
+    if (S.tut.level === 4 && !S.tut.sent && S.time >= S.tut.attackAt && !S.winner) {
+      S.tut.sent = true;
+      const st = S.tiles[S.tut.stage], u = E.U(st.u);
+      if (st.owner === 'p2' && E.total(u) > 0) E.apply(S, { player: 'p2', type: 'send', from: S.tut.stage, to: 0, units: u });
+      sfxCheck();
+    }
+    if (S.tut.level === 4 && S.tut.sent && !S.tut.held && !S.armies.some(a => a.owner !== ME && a.to === 0)) {
+      if (S.tiles[0].owner === ME) S.tut.held = true; else if (!ui.tutFailed) { ui.tutFailed = true; tutFinish(false, LX('Kullen föll. Fler sköldgrabbar, förbättringar i verkstaden och fler trupper på kullen hade hjälpt. Försök igen!', 'The Hill fell. More shieldbearers, workshop upgrades and more troops on the Hill would have helped. Try again!')); return; }
+    }
+    let m = tutCur(), changed = false;
+    // Bana 4: har kullen redan hållit räknas alla förberedelser som klara (annars kan man fastna om trupper dog).
+    const skip = x => S.tut.held && x.id !== 'rep';
+    while (m && (skip(m) || (!m.ack && m.check && m.check()))) { S.tut.done.push(m.id); changed = true; m = tutCur(); }
+    if (changed) { ui.tutOpen = true; sfxUntil.unlock = 0; playSfx('unlock'); save(); }
+    if (!m && !L.win && !S.tut.finished) { S.tut.finished = true; tutFinish(true); return; }
+    // Kortet
+    const i = m ? L.missions.indexOf(m) : L.missions.length - 1, mm = m || L.missions[i];
+    const timer = L.timer && !S.tut.sent ? '⚔ ' + dur(S.tut.attackAt - S.time) : '';
+    const sig = S.tut.level + '|' + (m ? m.id : '-') + '|' + ui.tutOpen + '|' + S.tut.done.length + '|' + (mm.prog ? mm.prog() : '') + '|' + timer;
+    if (sig !== ui.tutSig) {
+      ui.tutSig = sig;
+      setText($('tutStep'), (L.tour ? L.name : LX('Bana ', 'Level ') + S.tut.level) + ' · ' + (i + 1) + '/' + L.missions.length);
+      setText($('tutTitle'), tutTxt(mm.title) + (mm.prog ? ' (' + mm.prog() + ')' : ''));
+      $('tutTimer').hidden = !timer; setText($('tutTimer'), timer);
+      $('tutBody').hidden = !ui.tutOpen; $('tutToggle').setAttribute('aria-expanded', String(!!ui.tutOpen));
+      $('tutText').innerHTML = tutTxt(mm.text);
+      $('tutShow').hidden = !mm.go || !!L.tour; $('tutAck').hidden = !(m && m.ack);
+      $('tutBack').hidden = !L.tour || !S.tut.done.length;
+      setText($('tutAck'), L.tour ? (i === L.missions.length - 1 ? LX('Klar', 'Done') : LX('Nästa', 'Next')) : LX('OK, nästa', 'OK, next'));
+      setText($('tutAllSum'), L.tour ? LX('Alla steg', 'All steps') : LX('Alla uppdrag', 'All missions'));
+      const done = new Set(S.tut.done);
+      $('tutList').innerHTML = L.missions.map(x => '<li class="' + (done.has(x.id) ? 'done' : x === m ? 'cur' : '') + '">' + tutTxt(x.title) + '</li>').join('');
+    }
+    tutHL(m && m.hl ? m.hl() : []);
+    if (L.tour && m && ui.tourGo !== m.id) { ui.tourGo = m.id; setTimeout(() => tutGo(m, true), 0); }
+  }
+  // Visa mig (och snabbtutorialens steg): öppna rätt vy och rulla fram det som är markerat (utom flikarna).
+  function tutGo(m, keepOpen) {
+    if (!S || !S.tut || !m) return;
+    if (m.go) m.go();
+    if (!keepOpen && innerWidth < 960) ui.tutOpen = false;   // mobil: kortet fälls ihop så att det markerade syns
+    ui.tutSig = ''; tutTick();
+    requestAnimationFrame(() => { const el = ui.tutHL.filter(x => !x.classList.contains('tab') && x.offsetParent && x.closest('.view, #sheet')).pop(); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); });
+  }
+  // Markeringar: en pulserande guldram på knappar och tomter för det aktuella uppdraget.
+  ui.tutHL = [];
+  function tutHL(sels) {
+    const els = [];
+    for (const s of sels) { if (!s) continue; (typeof s === 'string' ? document.querySelectorAll(s) : [s]).forEach(el => { if (!(el.classList.contains('tab') && el.getAttribute('aria-selected') === 'true')) els.push(el); }); }
+    for (const el of ui.tutHL) if (!els.includes(el)) el.classList.remove('tut-hl');
+    for (const el of els) el.classList.add('tut-hl');
+    ui.tutHL = els;
+  }
+  const tutTile = () => { const m = tutCur(); return S && S.tut && m && m.tile ? m.tile() : -1; };
+  function tutFinish(won, why) {
+    const n = S.tut.level, L = TUTS[n];
+    if (won) { const d = tutDoneSet(); d.add(n); store.set(TDONE_KEY, [...d]); store.del(TSAVE_KEY); sfxUntil.levelup = 0; playSfx('levelup'); }
+    setText($('tutDoneTitle'), L.tour ? LX('Genomgången är klar', 'Tour complete') : won ? LX('Bana ' + n + ' klar!', 'Level ' + n + ' complete!') : LX('Inte den här gången', 'Not this time'));
+    setText($('tutDoneText'), won ? L.done : why || LX('Försök igen!', 'Try again!'));
+    $('tutNext').dataset.level = L.tour ? 'solo' : won ? (n < 7 ? n + 1 : '') : n;
+    $('tutNext').hidden = won && n >= 7;
+    setText($('tutNext'), L.tour ? LX('Spela ensam', 'Play solo') : won ? LX('Nästa bana', 'Next level') : LX('Försök igen', 'Try again'));
+    $('ov-tut').hidden = false;
+    paused = true;
+  }
+
   // ---------- Regler ----------
   function rulesHTML(cfg) {
     const c = Object.assign({}, Engine.CONFIG, cfg || {}), u = c.units, n1 = x => nf1.format(x), o = c.outpost, ws = { cfg: c }, pc = c.pace || 1;
     const D = ms => ms < 120000 ? Math.round(ms / 1000) + TR(' sekunder') : durWords(ms);
     const gold = gpm => c.pace ? nf1.format(gpm * 60 / pc) + TR(' guld i timmen') : gpm + TR(' guld per minut');
-    const hop = E.hopMs(ws, null, true), atk = E.attackMs(ws, null);
+    const hop = E.hopMs(ws, null, true), atk = E.attackMs(ws, null), sp = k => Math.round(c.skills[k].per * 100);
     return [
       TR('<b>Kartan</b> är en rund ö med ojämna rutor som slumpas fram för varje match, ') + c.regionsPerPlayer + TR(' per spelare. Ön är likadan runt om, så alla byar har samma avstånd till varandra och till kullen. Mörka bergskanter mellan två rutor går inte att passera.'),
       TR('Varje ruta du kontrollerar, byn inräknad, ger <b>1 vinstpoäng per ') + D(c.vpPerRegionMinutes * pc * MIN) + '</b>. ' + (c.vpToWin ? TR('Först till <b>') + c.vpToWin + TR(' vinstpoäng</b> vinner.') : TR('Flest vinstpoäng när tiden är ute vinner.')),
@@ -9726,7 +10493,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         TR(' guld att träna. Vinner ett anfall mot en by sänks byns högsta byggnad (slumpas bland de högsta) en nivå för varje siegeman som överlever, och du får halva kostnaden för nivåerna i guld. Ett anfall med siegemen mot en by går i halv fart.') : '',
       TR('I <b>verkstaden</b> förbättrar du anfall och försvar för alla dina trupper med +') + Math.round(c.researchBonusPerLevel * 100) + TR(' % per nivå, eller både anfall och försvar för en trupptyp i taget (soldat, berserker, sköldgrabb). Varje sak kan förbättras upp till verkstadens nivå, kön rymmer ') + c.researchQueueMax + TR(' förbättringar, och varje verkstadsnivå gör arbetet ') + Math.round((1 - c.workshopSpeedFactor) * 100) + TR(' % snabbare. En förbättring tar ') + D(E.researchMs(ws, 1, null)) + TR(' gånger nivån.'),
       TR('<b>Erfarenhet</b>: ') + c.expPerPlayerKill + TR(' exp per dödad fiendetrupp och ') + c.expPerNeutralKill + TR(' per dödad neutral soldat. Första nivån kräver ') + c.expFirstLevel + TR(' exp och varje ny nivå ') + Math.round((c.expGrowth - 1) * 100) + TR(' % mer. Varje nivå ger ett poäng i färdighetsträden anfall, försvar och ekonomi.'),
-      TR('<b>Färdigheter</b>: tre träd (anfall, försvar och ekonomi) med tre nivåer. Nivå 2 i ett träd kräver ') + c.tierPoints + TR(' poäng i trädet och nivå 3 ') + 2 * c.tierPoints + TR('. Anfall: <b>Blodtörst</b> (+6 % anfall per nivå), <b>Dödsångest</b> (+20 % lik per nivå), <b>Snabbfotad</b> (anfall 25 % snabbare per nivå) och <b>Stridsduglig</b> (dina anfall ignorerar utposternas grundförsvar och halva murbonusen). Försvar: <b>Hårdhudad</b> (+6 % försvar per nivå), <b>Järnspikar</b> (+1 grundförsvar per nivå på alla dina rutor), <b>En för alla, alla för en</b> (förflyttningar 25 % snabbare per nivå) och <b>Mur av döda</b> (draugar +0,5 i försvar). Ekonomi: <b>Guldpost</b> (utposterna +15 % guld per nivå), <b>Gruvdrift</b> (byns guldgruva +5 % per nivå), <b>Som ny!</b> (2 guld per nivå för varje fientlig trupp du dödar) och <b>Byggmästare</b> (utposter och murar ') + Math.round(c.skills.build.per * 100) + TR(' % billigare).'),
+      TR('<b>Färdigheter</b>: tre träd (anfall, försvar och ekonomi) med tre nivåer. Nivå 2 i ett träd kräver ') + c.tierPoints + TR(' poäng i trädet och nivå 3 ') + 2 * c.tierPoints + TR('. Anfall: <b>Blodtörst</b> (+') + sp('atk') + TR(' % anfall per nivå), <b>Dödsångest</b> (+') + sp('grim') + TR(' % lik per nivå), <b>Snabbfotad</b> (anfall ') + sp('blitz') + TR(' % snabbare per nivå), <b>Brohuvud</b> (en ruta du tar kan inte anfallas av andra spelare på ') + D(c.skills.bridge.sec * 1000 * pc) + TR(' per nivå) och <b>Stridsduglig</b> (dina anfall ignorerar utposternas grundförsvar och halva murbonusen). Försvar: <b>Hårdhudad</b> (+') + sp('def') + TR(' % försvar per nivå), <b>Järnspikar</b> (+1 grundförsvar per nivå på alla dina rutor), <b>En för alla, alla för en</b> (förflyttningar ') + sp('move') + TR(' % snabbare per nivå), <b>En gång till!</b> (') + n1(c.skills.again.per) + TR(' lik per nivå för varje draug som dör när du försvarar dig) och <b>Mur av döda</b> (draugar +0,5 i försvar). Ekonomi: <b>Guldpost</b> (utposterna +') + sp('eco') + TR(' % guld per nivå), <b>Gruvdrift</b> (alla dina guldgruvor, i byn och på kartan, +') + sp('mine') + TR(' % per nivå), <b>Som ny!</b> (2 guld per nivå för varje fientlig trupp du dödar), <b>Gruvtjuv</b> (') + sp('leech') + TR(' % per nivå av guldet från andra spelares guldgruvor som gränsar till dina rutor) och <b>Byggmästare</b> (utposter och murar ') + sp('build') + TR(' % billigare).'),
       TR('<b>Flytta armé</b> och <b>Kalla hem</b> finns på varje ruta där du har trupper. Flyttar du armén till en ruta du inte kontrollerar blir det ett anfall. En ruta du tog senast kan du bygga utpost på även när den står tom, tills någon annan tar den.'),
       TR('<b>Byn</b> har ') + E.PLOTS + TR(' tomter. Tryck på en ledig tomt för att bygga något nytt, och på en byggnad för att bygga ut den eller använda den, till exempel verkstadens förbättringar.') + TR(' Muren byggs för sig på ringen runt byn och syns både i byn och på kartan.'),
       TR('<b>Två rivaler</b> spelar efter samma regler, dimman inräknad. De anfaller dig och varandra, slåss om kullen och går hellre på den som leder med mer än ') + c.leaderLead + TR(' vinstpoäng.'),
@@ -9734,7 +10501,6 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       TR('<b>Online</b>: 2–8 spelare, ungefär ') + c.regionsPerPlayer + TR(' rutor per spelare. En spelare skapar en lobby, väljer hur många vinstpoäng som krävs och kan fylla på med bottar; de andra går med under Spela online. Alla väljer en avatar. Spelet börjar i 1×. Värden kör spelet och kan ändra hastigheten under spelets gång, så det går bara medan värden har det öppet. Tappar du anslutningen kan du återansluta, och värden kan fortsätta ett sparat onlinespel senare.'),
     ].map(x => '<li>' + x + '</li>').join('');
   }
-  $('rulesStart').innerHTML = rulesHTML();
   $('rulesMenu').innerHTML = rulesHTML();
   setSound(sfx.on);
 
