@@ -1602,8 +1602,8 @@ const Engine = (function () {
   // ---- Inställningar. Alla tider är i speltid. ----
   // Rader märkta [antagande] var inte specificerade och går att ändra fritt.
   const CONFIG = {
-    regionsPerPlayer: 12,         // kartan får ungefär 12 rutor per spelare ...
-    minRegions: 24,               // ... men minst 24
+    regionsPerPlayer: 15,         // kartan får ungefär 15 rutor per spelare (12 före v48) ...
+    minRegions: 27,               // ... men minst 27
     regionArea: 30,               // [antagande] kartyta per ruta (kartenheter²), vattnet tillkommer
     cellsPerUnit: 4,              // upplösning för rutornas former
     rivalCount: 2,                // två fientliga bottar
@@ -1612,6 +1612,7 @@ const Engine = (function () {
     // Guldgruvan i byn (version 32): nivå L ger avrundat 8 × 1,4^(L − 1) guld i minuten (8, 11, 16, 22, 31 …),
     // och en uppgradering betalar sig på 10, 12, 14, 16 … minuter i timmesspelet (kostnaden räknas fram ur det).
     goldPerMin: 8,
+    mineBoost: 1.2,               // byns guldgruva ger 20 % mer (v48); uppgraderingarnas kostnad räknas fortfarande på grundvärdet
     productionGrowth: 1.4,
     baseCapacity: 800,            // förrådet rymmer 800 guld från start
     capacityPerLevel: 1200,       // +1 200 per nivå på skattkammaren
@@ -1635,7 +1636,7 @@ const Engine = (function () {
     crypt: { trainSeconds: 20, speedFactor: 0.9 },   // en draug tar 20 s, 10 % snabbare per kryptnivå
     tower: { costs: [20, 40] },   // utkikstorn på en egen ruta: nivå 1 ser 2 rutor bort, nivå 2 kan också anfalla dit
     unlockMinutes: 2,             // [antagande] en upplåsning i forskningscentret tar 2 minuter
-    researchBonusPerLevel: 0.06,  // verkstaden: +6 % per nivå (4 % före version 25)
+    researchBonusPerLevel: 0.08,  // verkstaden: +8 % per nivå (6 % före v48, 4 % före version 25)
     researchCostFirst: 40,        // [antagande] nivå 1 kostar 40 guld ...
     researchCostGrowth: 1.5,      // ... och varje nivå × 1,5 ...
     researchCostGrowthHigh: 1.2,  // ... över nivå 10 × 1,2
@@ -1710,7 +1711,7 @@ const Engine = (function () {
       barracks: { start: 0, max: 20, costBase: 20, costPerLevel: 20, steepFrom: 10, steepGrowth: 1.35 },
       workshop: { start: 0, max: 20, costBase: 40, costPerLevel: 20, steepFrom: 10, steepGrowth: 1.35 },   // 40/60/80/100/120 …
       crypt:    { start: 0, max: 20, costBase: 20, costPerLevel: 20, steepFrom: 10, steepGrowth: 1.35 },   // kryptan: samma kostnad som barracken
-      econ:     { start: 0, max: 10, costBase: 20, costPerLevel: 20 },   // ekonomicentrum: 20 + 20 × L; varje nivå låter dig uppgradera kartans guldgruvor en nivå [antagande: högst 10]
+      econ:     { start: 0, max: 10, costBase: 10, costPerLevel: 20 },   // ekonomicentrum: 10 + 20 × L (20 + 20 × L före v48); varje nivå låter dig uppgradera kartans guldgruvor en nivå [antagande: högst 10]
       lab:      { start: 0, max: 3, costList: [30, 50, 100] },     // forskningscenter: berserker (1), sköldgrabb (2), siegeman (3) [antagande: nivå 3 kostar 100]
       treasury: { start: 0, max: 10, costBase: 40, costPerLevel: 40 },
       wall:     { start: 0, max: 10, costBase: 40, costPerLevel: 40 },   // mur runt byn [antagande: kostnad och tak]
@@ -1762,7 +1763,7 @@ const Engine = (function () {
     week: {
       players: 10, days: 7, pace: 20, stepMs: 2000, joinBonusPerDay: 0.2,
       hillDef: { step: 0.01, every: 3 },   // kullens försvar sjunker 1 procentenhet var 3:e minut × pace = varje timme
-      regionsPerSlot: 15, base: 3, core: 0,   // 15 rutor per byplats; de 3 innersta (basen) finns alltid, även utan spelare
+      regionsPerSlot: 18, base: 3, core: 0,   // 18 rutor per byplats (15 före v48); de 3 innersta (basen) finns alltid, även utan spelare
       immunityHours: 6, immunityAfterMinutes: 60,   // den som går med efter första timmen är immun i 6 timmar
       build: { base: 0.6, perLevel: 0.6, max: 12, queue: 2 },
       mul: { train: 0.5, lab: 0.5, research: 0.3, attack: 0.5, move: 0.4 },
@@ -2466,7 +2467,9 @@ const Engine = (function () {
   }
   function tutorialGame(opts) {
     const n = opts.tutorial === 0 || opts.tutorial === 'quick' ? 0 : Math.max(1, Math.min(7, opts.tutorial | 0)), T = TUT_GAMES[n];
-    const s = createGame({ seed: T.seed != null ? T.seed : opts.seed, villageName: opts.villageName, avatar: opts.avatar, rival: T.rival, rivalCount: T.rivalCount, vpToWin: T.vpToWin });
+    // Bana 0–5 är byggda för kartan med 12 rutor per spelare; bana 6–7 (riktiga matcher) får den nya storleken.
+    const config = n <= 5 ? Object.assign(JSON.parse(JSON.stringify(CONFIG)), { regionsPerPlayer: 12, minRegions: 24 }) : undefined;
+    const s = createGame({ seed: T.seed != null ? T.seed : opts.seed, villageName: opts.villageName, avatar: opts.avatar, rival: T.rival, rivalCount: T.rivalCount, vpToWin: T.vpToWin, config });
     const c = s.cfg, p = s.players.p1, v = p.village, tw = s.towns[v];
     s.tut = { level: n, done: [] };
     const land = i => s.tiles[i] && s.tiles[i].type === 'land' && !s.tiles[i].hill && !s.tiles[i].off;
@@ -2662,7 +2665,7 @@ const Engine = (function () {
   function upgradeCost(s, key, level) {
     const b = s.cfg.buildings[key];
     if (b.costList) return b.costList[Math.min(level, b.costList.length - 1)];
-    if (b.roi) return (b.roi[0] + b.roi[1] * (level - b.start)) * (goldPerMinAt(s, level + 1) - goldPerMinAt(s, level));
+    if (b.roi) return (b.roi[0] + b.roi[1] * (level - b.start)) * (baseGoldPerMinAt(s, level + 1) - baseGoldPerMinAt(s, level));
     if (b.costGrowth) return Math.round(b.costFirst * (b.costMul || 1) * Math.pow(b.costGrowth, level - b.start + (b.costOffset || 0)));
     if (b.steepFrom && level >= b.steepFrom) return Math.round((b.costBase + b.costPerLevel * (b.steepFrom - 1)) * Math.pow(b.steepGrowth, level - b.steepFrom + 1));
     return b.costBase + b.costPerLevel * level;
@@ -2673,7 +2676,9 @@ const Engine = (function () {
   const isMine = (t, pid) => t.owner === pid || t.occ === pid;
   // Produktion per timme (i veckospelet delad med tempot).
   // Guldgruvan: guld i minuten på nivå L (heltal, timmesspelets minuter), och per timme (i veckospelet delat med tempot).
-  function goldPerMinAt(s, level) { return level < 1 ? 0 : Math.round(s.cfg.goldPerMin * Math.pow(s.cfg.productionGrowth, level - 1)); }
+  function goldPerMinAt(s, level) { return level < 1 ? 0 : Math.round(s.cfg.goldPerMin * (s.cfg.mineBoost || 1) * Math.pow(s.cfg.productionGrowth, level - 1)); }
+  // Utan ökningen från v48: kostnaden för att bygga ut guldgruvan räknas på det här.
+  function baseGoldPerMinAt(s, level) { return level < 1 ? 0 : Math.round(s.cfg.goldPerMin * Math.pow(s.cfg.productionGrowth, level - 1)); }
   function prodAtLevel(s, level) { return goldPerMinAt(s, level) * 60 / paceOf(s); }
   const skillLv = (p, k) => (p && p.skills && p.skills[k]) || 0;
   // Bottarnas guldbonus och veckospelets handikapp (gäller allt guld spelaren producerar).
@@ -4095,6 +4100,13 @@ const Engine = (function () {
     if (s && s.cfg && s.cfg.skills) {
       for (const k in CONFIG.skills) s.cfg.skills[k] = Object.assign({}, CONFIG.skills[k], s.cfg.skills[k] || {});   // nya färdigheter och nya fält (t.ex. Byggmästarens extra nivåer)
       for (const id in s.players || {}) { const p = s.players[id]; if (p.skills) for (const k in s.cfg.skills) if (p.skills[k] == null) p.skills[k] = 0; }
+    }
+    // v48: verkstaden +8 % per nivå, byns guldgruva +20 %, ekonomicentrum 10 guld billigare per nivå.
+    if (s && s.cfg) {
+      if (s.cfg.researchBonusPerLevel === 0.06) s.cfg.researchBonusPerLevel = CONFIG.researchBonusPerLevel;
+      if (s.cfg.mineBoost == null) s.cfg.mineBoost = CONFIG.mineBoost;
+      const ec = s.cfg.buildings && s.cfg.buildings.econ;
+      if (ec && ec.costBase === 20 && ec.costPerLevel === 20) ec.costBase = CONFIG.buildings.econ.costBase;
     }
     // v47: 20 % mer exp per nivå i stället för 30 %. Gamla spel får det nya värdet, och den som nu har nog exp går upp direkt.
     if (s && s.cfg && s.cfg.expGrowth === 1.3) {
@@ -9572,7 +9584,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     supabaseKey: 'sb_publishable_eyoxyRNFN4f1KOsOhJjdBQ_LGNIQ3DZ',   // publik nyckel, får synas
     ice: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
   };
-  const PROTO = 16, MAXP = E.CONFIG.maxOnline || 8, CHUNK = 15000;
+  const PROTO = 17, MAXP = E.CONFIG.maxOnline || 8, CHUNK = 15000;
   const useLocal = () => !ONLINE_CFG.supabaseUrl || !ONLINE_CFG.supabaseKey || /[?&]lokal\b/.test(location.search);
   function rid(n) {
     const a = 'abcdefghjkmnpqrstuvwxyz23456789', r = crypto.getRandomValues(new Uint8Array(n));
@@ -10316,8 +10328,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
             'Here you unlock new troop types: berserker at level 1, shieldbearer at level 2 and siegeman at level 3.'),
           hl: () => ['#vscene .plot[data-plot="' + plotOf('lab') + '"]', '#labRows'], go: goPlot('lab') },
         { id: 'q10', ack: true, title: LX('Verkstaden', 'The workshop'),
-          text: LX('Verkstaden förbättrar anfall eller försvar för alla dina trupper, eller en trupptyp, med +6 % per nivå. Den kan förbättra upp till sin egen nivå.',
-            'The workshop improves attack or defence for all your troops, or one troop type, by +6% per level. It can improve up to its own level.'),
+          text: LX('Verkstaden förbättrar anfall eller försvar för alla dina trupper, eller en trupptyp, med +8 % per nivå. Den kan förbättra upp till sin egen nivå.',
+            'The workshop improves attack or defence for all your troops, or one troop type, by +8% per level. It can improve up to its own level.'),
           hl: () => ['#vscene .plot[data-plot="' + plotOf('workshop') + '"]', '#research'], go: goPlot('workshop') },
         { id: 'q11', ack: true, title: LX('Fler byggnader', 'More buildings'),
           text: LX('<b>Skattkammaren</b> höjer förrådets tak. <b>Ekonomicentrum</b> låter dig bygga ut guldgruvorna på kartan. I <b>kryptan</b> väcker du dina stupade som draugar (billiga trupper av liken).',
@@ -10372,8 +10384,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       done: LX('Du kan grunderna: guldgruvan ger guld, barracken tränar trupper, du anfaller neutrala rutor och gör dem till dina med utposter.', 'You know the basics: the gold mine gives gold, the barracks train troops, you attack neutral territories and make them yours with outposts.'),
       missions: [
         { id: 'gm', title: LX('Uppgradera guldgruvan', 'Upgrade the gold mine'),
-          text: LX('Guldgruvan i byn ger guld varje minut, och guld behövs till allt. Tryck på <b>guldgruvan</b> i byn och sedan på <b>Bygg ut</b>. Nivå 2 ger 11 guld i minuten i stället för 8. Den blå rutan <b>ROI</b> visar hur snabbt en uppgradering betalar sig.',
-            'The gold mine in your village gives gold every minute, and you need gold for everything. Tap the <b>gold mine</b> in the village and then <b>Upgrade</b>. Level 2 gives 11 gold per minute instead of 8. The blue <b>ROI</b> box shows how fast an upgrade pays for itself.'),
+          text: () => LX('Guldgruvan i byn ger guld varje minut, och guld behövs till allt. Tryck på <b>guldgruvan</b> i byn och sedan på <b>Bygg ut</b>. Nivå 2 ger ' + E.goldPerMinAt(S, 2) + ' guld i minuten i stället för ' + E.goldPerMinAt(S, 1) + '. Den blå rutan <b>ROI</b> visar hur snabbt en uppgradering betalar sig.',
+            'The gold mine in your village gives gold every minute, and you need gold for everything. Tap the <b>gold mine</b> in the village and then <b>Upgrade</b>. Level 2 gives ' + E.goldPerMinAt(S, 2) + ' gold per minute instead of ' + E.goldPerMinAt(S, 1) + '. The blue <b>ROI</b> box shows how fast an upgrade pays for itself.'),
           check: () => TW().buildings.goldmine >= 2, hl: () => ['#vscene .plot[data-plot="0"]', '#ledger .bld[data-b="goldmine"] [data-act=upgrade]', '.tab[data-tab=village]'], go: goPlot('goldmine') },
         { id: 'bar', title: LX('Bygg en barrack', 'Build barracks'),
           text: LX('Barracken tränar trupper. Tryck på en <b>ledig tomt</b> (med ett +) i byn och välj <b>Barrack</b>.', 'The barracks train troops. Tap an <b>empty plot</b> (with a +) in the village and choose <b>Barracks</b>.'),
@@ -10469,10 +10481,10 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
           text: LX('I <b>verkstaden</b> förbättrar du dina trupper, en nivå i taget upp till verkstadens nivå. Här går förbättringarna extra fort.', 'In the <b>workshop</b> you upgrade your troops, one level at a time up to the workshop’s level. Here the upgrades are extra fast.'),
           check: () => TW().buildings.workshop >= 2, hl: hlBuild('workshop'), go: goBuild('workshop'), prog: () => TW().buildings.workshop + '/2' },
         { id: 'def2', title: LX('Förbättra försvar till nivå 2', 'Upgrade defence to level 2'),
-          text: LX('Tryck på verkstaden och på <b>Försvar</b>. Varje nivå ger +6 % försvar för alla dina trupper. Förbättringar kan läggas i kö.', 'Tap the workshop and <b>Defence</b>. Each level gives +6% defence for all your troops. Upgrades can be queued.'),
+          text: LX('Tryck på verkstaden och på <b>Försvar</b>. Varje nivå ger +8 % försvar för alla dina trupper. Förbättringar kan läggas i kö.', 'Tap the workshop and <b>Defence</b>. Each level gives +8% defence for all your troops. Upgrades can be queued.'),
           check: () => (me().up.defense || 0) >= 2, hl: () => ['#vscene .plot[data-plot="' + plotOf('workshop') + '"]', '#res-defense-btn', '.tab[data-tab=village]'], go: goPlot('workshop'), prog: () => (me().up.defense || 0) + '/2' },
         { id: 'sh2', title: LX('Förbättra sköldgrabbar till nivå 2', 'Upgrade shieldbearers to level 2'),
-          text: LX('En förbättring av en trupptyp ger +6 % i både anfall och försvar för just den typen.', 'Upgrading a troop type gives +6% attack and defence for that type.'),
+          text: LX('En förbättring av en trupptyp ger +8 % i både anfall och försvar för just den typen.', 'Upgrading a troop type gives +8% attack and defence for that type.'),
           check: () => (me().up.shield || 0) >= 2, hl: () => ['#vscene .plot[data-plot="' + plotOf('workshop') + '"]', '#res-shield-btn', '.tab[data-tab=village]'], go: goPlot('workshop'), prog: () => (me().up.shield || 0) + '/2' },
         { id: 's20', title: LX('Träna 20 sköldgrabbar', 'Train 20 shieldbearers'),
           text: LX('Träna sköldgrabbar i barracken tills du har 20. Öka gärna tempot medan du väntar.', 'Train shieldbearers in the barracks until you have 20. Feel free to speed up while you wait.'),
@@ -10753,7 +10765,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       TR('<b>Dimma</b>: du ser alltid vem som kontrollerar varje ruta, men hur många trupper som står där ser du bara på dina rutor och deras grannar. Kullen syns alltid för alla. Fiendens trupper som går hem efter ett anfall mot dig syns hela vägen, med antal.'),
       TR('Anfallspoäng och försvarspoäng räknas ihop för alla trupper. Den överlägsna sidan får sin överlägsenhet dubblad. Varje sida förlorar sedan andelen <b>motståndarens poäng delat med de egna</b> av sina trupper, avrundat nedåt. Exempel: 10 mot 5 blir 15 mot 5, så anfallaren förlorar en tredjedel (3) och försvararen alla. Den svagare sidan förlorar alltid alla, och vid lika poäng dör alla på båda sidor.'),
       TR('Du börjar med ') + c.startGold + TR(' guld och får <b>') + (c.pace ? n1(E.goldPerMinAt(ws, 1) * 60 / pc) + TR(' guld i timmen') : E.goldPerMinAt(ws, 1) + TR(' guld i minuten')) + TR('</b> från guldgruvan. Förrådet rymmer ') + c.baseCapacity + TR(' guld; skattkammaren rymmer mer. Det finns ingen mat: trupperna äter inte.'),
-      TR('<b>Guldgruvan</b> ger ') + n1((c.productionGrowth - 1) * 100) + TR(' % mer för varje nivå (') + [1, 2, 3, 4, 5].map(L => E.goldPerMinAt(ws, L)).join(', ') + TR(' … guld i minuten), och varje uppgradering betalar sig på ') + [0, 1, 2, 3].map(k => c.buildings.goldmine.roi[0] + c.buildings.goldmine.roi[1] * k).join(', ') + TR(' … minuter') + (c.pace ? TR(' i timmesspelet') : '') + TR('. Guldgruvan har inget tak. Byggen kostar guld.'),
+      TR('<b>Guldgruvan</b> ger ') + n1((c.productionGrowth - 1) * 100) + TR(' % mer för varje nivå (') + [1, 2, 3, 4, 5].map(L => E.goldPerMinAt(ws, L)).join(', ') + TR(' … guld i minuten), och varje uppgradering betalar sig på ') + [1, 2, 3, 4].map(L => Math.round(E.upgradeCost(ws, 'goldmine', L) / (E.goldPerMinAt(ws, L + 1) - E.goldPerMinAt(ws, L)))).join(', ') + TR(' … minuter') + (c.pace ? TR(' i timmesspelet') : '') + TR('. Guldgruvan har inget tak. Byggen kostar guld.'),
       TR('Barracken och verkstaden går upp till nivå ') + c.buildings.barracks.max + TR('. Från nivå ') + c.buildings.barracks.steepFrom + TR(' blir varje nivå ') + Math.round((c.buildings.barracks.steepGrowth - 1) * 100) + TR(' % dyrare än förra. Barracken tränar trupper, ') + D(E.trainMs(ws, null, 1)) + TR(' per trupp på nivå 1.'),
       TR('I <b>kryptan</b> väcker du dina stupade som <b>draugar</b>: anfall ') + n1(u.draug.atk) + TR(', försvar ') + n1(u.draug.def) + ', ' + u.draug.cost + TR(' guld styck, ') + D((c.crypt || E.CONFIG.crypt).trainSeconds * 1000) + TR(' per draug på nivå 1 och 10 % snabbare för varje nivå. Du får ett lik för varje trupp du förlorar (även innan kryptan finns, och fler med Dödsångest), och varje draug kräver ett lik. Draugar som dör blir inga lik. Verkstadens anfall och försvar gäller draugar, men de har ingen egen förbättring. Kryptan kostar lika mycket som barracken.'),
       TR('<b>Soldat</b>: anfall ') + n1(u.soldier.atk) + TR(', försvar ') + n1(u.soldier.def) + ', ' + u.soldier.cost + TR(' guld. I <b>forskningscentret</b> (') + c.buildings.lab.costList.join('/') + TR(' guld för nivå 1–') + c.buildings.lab.costList.length + TR(') låser du upp nya trupper för ') + u.berserker.unlockCost + TR(' guld styck (det tar ') + D(E.unlockMs(ws)) + TR('): <b>Berserker</b> (nivå 1) anfall ') + n1(u.berserker.atk) + TR(', försvar ') + n1(u.berserker.def) + TR('. <b>Sköldgrabb</b> (nivå 2) anfall ') + n1(u.shield.atk) + TR(', försvar ') + n1(u.shield.def) + TR('. De nya kostar ') + u.berserker.cost + TR(' guld att träna.'),
