@@ -859,7 +859,13 @@ button.stat:hover { background: var(--slab-3); }
 .seg.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .seg.three button { font: 600 15px var(--f-body); }
 .stand-end { justify-self: end; display: flex; align-items: center; gap: 6px; }
-.stand-end .tag { margin: 0; }
+.stand-end .tag { margin: 0; white-space: nowrap; }
+.team-head { display: flex; justify-content: space-between; align-items: baseline; margin: 6px 2px 0; font: 600 14px var(--f-num); letter-spacing: .05em; text-transform: uppercase; color: var(--ink-dim); }
+.team-head b { color: var(--ink); }
+.btn.team-sw { padding: 4px 10px; min-height: 0; font-size: 13px; }
+.stand.team { border-width: 2px; }
+.stand.team .who { font-size: 17px; }
+@media (max-width: 480px) { .stand.with-ava.tm .stand-end { grid-column: 2 / -1; justify-self: start; } }
 /* Dator med smalare fönster: loggan ger plats åt nivå, by och siffror. */
 @media (min-width: 960px) and (max-width: 1199px) {
   .hud .brand { display: none; }
@@ -1055,6 +1061,9 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 .tut-text b { color: var(--tut); font-weight: 700; }
 .tut-tip { margin: 0; padding: 6px 10px; border-radius: 8px; background: rgba(230, 180, 67, .12); border-left: 3px solid var(--gold); color: var(--ink); font-size: 14px; line-height: 1.35; }
 .tut-tip b { color: var(--gold); }
+.camp-note { border-color: #b8743a; }
+.camp-note .camp-ic { width: 34px; height: 34px; flex: none; border-radius: 24%; overflow: hidden; box-shadow: 0 0 0 2px #b8743a; }
+.camp-note .camp-ic svg { width: 100%; height: 100%; display: block; }
 .tut-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .tut-btns .btn { padding: 6px 14px; min-height: 0; }
 .tut-btns .btn[hidden] { display: none; }
@@ -1530,6 +1539,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
         <span class="label" id="onVpLabel">Vinstpoäng för seger</span>
         <div class="stepper vp-step" role="group" aria-labelledby="onVpLabel"><button type="button" data-act="on-vp" data-d="-25" id="onVpMinus" aria-label="Färre vinstpoäng">−</button><b id="onVp">100</b><button type="button" data-act="on-vp" data-d="25" id="onVpPlus" aria-label="Fler vinstpoäng">+</button></div>
       </div>
+      <div class="field team-row"><label class="check"><input type="checkbox" id="onTeams"><span id="onTeamsLbl">Två lag</span></label></div>
       <div class="field" id="onBotRow">
         <span class="label" id="onBotLabel">Lägg till bot</span>
         <div class="seg three" role="group" aria-labelledby="onBotLabel">
@@ -1631,11 +1641,14 @@ const Engine = (function () {
       siege:     { atk: 2,   def: 1,   cost: 30, lab: 3, unlockCost: 100 },
       // Draug: väcks i kryptan av dina stupade trupper (ett lik per trupp du förlorat; draugar blir inga lik).
       // Får verkstadens anfall och försvar, men har ingen egen förbättring.
-      draug:     { atk: 1,   def: 0.5, cost: 5, crypt: true },
+      draug:     { atk: 0.9, def: 0.5, cost: 5, crypt: true },   // anfall 0,9 (1 före v51)
     },
-    crypt: { trainSeconds: 20, speedFactor: 0.9 },   // en draug tar 20 s, 10 % snabbare per kryptnivå
+    crypt: { trainSeconds: 10, speedFactor: 0.9 },   // en draug tar 10 s (20 före v51), 10 % snabbare per kryptnivå
+    // Banditläger (v51): från minut 7, var annan minut, 5 % chans per ruta som en spelare kontrollerar (inte byar och kullen).
+    // 1 bandit + 1 per påbörjade 8 minuter. Bara ägaren ser lägret. Inte i veckospelet.
+    camp: { from: 7, every: 2, chance: 0.05, perMinutes: 8 },
     tower: { costs: [20, 40] },   // utkikstorn på en egen ruta: nivå 1 ser 2 rutor bort, nivå 2 kan också anfalla dit
-    unlockMinutes: 2,             // [antagande] en upplåsning i forskningscentret tar 2 minuter
+    unlockMinutes: 1,             // en upplåsning i forskningscentret tar 1 minut (2 före v50)
     researchBonusPerLevel: 0.08,  // verkstaden: +8 % per nivå (6 % före v48, 4 % före version 25)
     researchCostFirst: 40,        // [antagande] nivå 1 kostar 40 guld ...
     researchCostGrowth: 1.5,      // ... och varje nivå × 1,5 ...
@@ -1791,6 +1804,10 @@ const Engine = (function () {
   const ATK = ['berserker', 'soldier', 'draug', 'shield'];   // ordning när ett anfall sätts ihop
   const DEF = ['shield', 'soldier', 'berserker', 'draug'];   // ordning när en ruta förstärks
   const KEEP = ['shield', 'soldier', 'berserker', 'draug'];  // vilka som helst stannar kvar som vakt
+  // Bottarna (v50): berserkers försvarar dåligt (0,3), så de skickas aldrig för att försvara och stannar sist kvar som vakt.
+  // Draugar är billiga (5 guld + ett lik) och går först i anfallen.
+  const BDEF = ['shield', 'soldier', 'draug'];
+  const BKEEP = ['shield', 'soldier', 'draug', 'berserker'];
 
   // ---- Seedad slump (mulberry32). Tillståndet ligger i s.rng. ----
   function rand(s) {
@@ -1849,7 +1866,12 @@ const Engine = (function () {
     for (let i = 0; given < n && i < rem.length; i++) { const k = rem[i][1]; if (out[k] < (u[k] || 0)) { out[k]++; given++; } }
     return out;
   }
-  function syncTile(t) { t.troops = total(t.u); }
+  function syncTile(t) {
+    let n = total(t.u);
+    // t.al: lagkamraters trupper som står på rutan ({ spelare: trupper }).
+    if (t.al) { for (const id in t.al) { const k = total(t.al[id]); if (k > 0) n += k; else delete t.al[id]; } if (!Object.keys(t.al).length) delete t.al; }
+    t.troops = n;
+  }
 
   // =====================================================================
   //   KARTAN: ojämna rutor som i Risk
@@ -2316,6 +2338,7 @@ const Engine = (function () {
       nextId: 1, winner: null, endedAt: null, online: !!humans,
     };
     if (week) { s.week = true; s.nextSpawnAt = MINUTE * cfg.pace * (cfg.spawnGraceMinutes || 1); }
+    else if (cfg.camp) s.nextCampAt = cfg.camp.from * MINUTE * paceOf(s);   // banditläger (inte i veckospelet)
     // Rund karta. Bland några varianter väljs en där byarna inte ligger för nära kullen eller varandra.
     const K = slots;
     let M = null, mseed = seed, bestSc = -Infinity, bestEq = false;
@@ -2404,13 +2427,23 @@ const Engine = (function () {
     }
     if (humans) {
       const taken = new Set();
+      // Två lag: lagkamraterna får byplatser bredvid varandra (lag 1 först, sedan lag 2) och färger ur samma familj.
+      const teams = opts.teams ? humans.map(h => (h.team | 0) === 1 ? 1 : 0) : null;
+      const vIdx = humans.map((h, i) => i);
+      if (teams) { s.teams = true; vIdx.sort((a, b) => teams[a] - teams[b] || a - b); }
+      const slotOf = new Array(humans.length);
+      vIdx.forEach((hi, k) => { slotOf[hi] = k; });
+      const colIdx = teams ? teamColorIdx(teams) : humans.map((h, i) => i);
       humans.forEach((h, i) => {
         let vn = String(h.villageName || '').trim().slice(0, 24) || ('By ' + (i + 1));
         for (let k = 2; taken.has(vn.toLowerCase()); k++) vn = String(h.villageName).slice(0, 21) + ' ' + k;
         taken.add(vn.toLowerCase());
-        const col = cfg.playerColors[i % cfg.playerColors.length];
-        addPlayer(s, 'p' + (i + 1), { name: String(h.name || 'Spelare ' + (i + 1)).slice(0, 16), villageName: vn, color: col[0], hi: col[1], bot: h.bot || null, avatar: h.avatar }, villages[i]);
+        const col = cfg.playerColors[colIdx[i] % cfg.playerColors.length];
+        addPlayer(s, 'p' + (i + 1), { name: String(h.name || 'Spelare ' + (i + 1)).slice(0, 16), villageName: vn, color: col[0], hi: col[1], bot: h.bot || null, avatar: h.avatar }, villages[slotOf[i]]);
+        if (teams) s.players['p' + (i + 1)].team = teams[i];
       });
+      // Lagspel: poängmålet gånger antalet spelare i det minsta laget (2 → ×2, 3 → ×3, 4 → ×4).
+      if (teams && cfg.vpToWin) cfg.vpToWin *= Math.max(1, Math.min(teams.filter(x => x === 0).length, teams.filter(x => x === 1).length));
       return s;
     }
     if (week) {
@@ -2489,7 +2522,7 @@ const Engine = (function () {
     if (n >= 2 && n <= 5) {
       // Det spelaren byggt i bana 1: guldgruvan 2, barrack och en utpost (nivå 2) på första rutan.
       bld(tw, { goldmine: 2, barracks: 1 }); own(towardHill[0], 'p1', 2); home(tw, { soldier: 3 }); tw.gold = 250;
-      c.unlockMinutes = 0.5;
+      c.unlockMinutes = 0.25;
       // De andra spelarna (passiva) har var sin ruta bredvid byn med två soldater, så att man ser dem på kartan.
       for (const id of s.order.slice(1)) { const pv = s.players[id].village, t = nb(pv).find(i => !s.tiles[i].owner); if (t != null) own(t, id, 1, { soldier: 2 }); }
     }
@@ -2674,6 +2707,11 @@ const Engine = (function () {
   // Rutor spelaren kontrollerar (byn räknas).
   function countControlled(s, pid) { let n = 0; for (const t of s.tiles) if (t.owner === pid) n++; return n; }
   const isMine = (t, pid) => t.owner === pid || t.occ === pid;
+  // Lag: trupper kan stå på en lagkamrats ruta (inte i deras by) som om den vore ens egen.
+  function parkable(s, t, pid) { const h = t.owner || t.occ; return !!s.teams && t.type !== 'village' && !!h && h !== pid && ally(s, h, pid); }
+  function standsOn(s, t, pid) { return isMine(t, pid) || parkable(s, t, pid); }
+  // Kan trupperna gå igenom rutan (egna rutor och lagkamraters)?
+  function passable(s, t, pid) { return t.owner === pid || (!!s.teams && !!t.owner && ally(s, t.owner, pid)); }
   // Produktion per timme (i veckospelet delad med tempot).
   // Guldgruvan: guld i minuten på nivå L (heltal, timmesspelets minuter), och per timme (i veckospelet delat med tempot).
   function goldPerMinAt(s, level) { return level < 1 ? 0 : Math.round(s.cfg.goldPerMin * (s.cfg.mineBoost || 1) * Math.pow(s.cfg.productionGrowth, level - 1)); }
@@ -2702,7 +2740,7 @@ const Engine = (function () {
   // Gruvtjuv: en del av guldet från en annan spelares guldgruva (ruta i) som gränsar till en ruta p kontrollerar. Ägaren förlorar inget.
   function leechAt(s, p, i) {
     const L = skillLv(p, 'leech'), t = s.tiles[i];
-    if (!L || !t || !t.mine || !t.owner || t.owner === p.id || !t.adj.some(j => s.tiles[j].owner === p.id)) return 0;
+    if (!L || !t || !t.mine || !t.owner || ally(s, t.owner, p.id) || !t.adj.some(j => s.tiles[j].owner === p.id)) return 0;
     return regionMineGph(s, t.mineLvl, s.players[t.owner]) * s.cfg.skills.leech.per * L;
   }
   function leechGph(s, p) {
@@ -2721,7 +2759,7 @@ const Engine = (function () {
   function armyUnits(s, p) {
     const u = U();
     for (const tw of townsOf(s, p)) addTo(u, tw.hu);
-    for (const t of s.tiles) if (t.type !== 'village' && isMine(t, p.id)) addTo(u, t.u);
+    for (const t of s.tiles) { if (t.type !== 'village' && isMine(t, p.id)) addTo(u, t.u); else if (t.al && t.al[p.id]) addTo(u, t.al[p.id]); }
     for (const a of s.armies) if (a.owner === p.id) addTo(u, a.u);
     return u;
   }
@@ -2818,6 +2856,23 @@ const Engine = (function () {
     for (const k in v) v[k] += w;
     // Mur av döda: draugarnas försvar 0,5 → 1 (bonusarna räknas på det nya värdet).
     if (skillLv(dp, 'dead')) { const d = s.cfg.units.draug.def; v.draug *= (d + s.cfg.skills.dead.def) / d; }
+    // Lagkamraters trupper på rutan försvarar med sina egna bonusar (och rutans mur och kulle). Multiplikatorn per
+    // trupptyp blir ett viktat medel, så att försvarspoängen blir summan av allas.
+    if (t.al && t.type !== 'village') {
+      const num = {}, den = {};
+      for (const k of UNIT_KEYS) { den[k] = t.u[k] || 0; num[k] = den[k] * v[k]; }
+      for (const id in t.al) {
+        const ap = s.players[id], g = t.al[id];
+        if (!ap || !total(g)) continue;
+        const va = defenseVec(s, ap, full);
+        for (const k of UNIT_KEYS) {
+          let x = va[k] + w;
+          if (k === 'draug' && skillLv(ap, 'dead')) x *= (s.cfg.units.draug.def + s.cfg.skills.dead.def) / s.cfg.units.draug.def;
+          num[k] += (g[k] || 0) * x; den[k] += g[k] || 0;
+        }
+      }
+      for (const k of UNIT_KEYS) if (den[k] > 0) v[k] = num[k] / den[k];
+    }
     if (t.type === 'village') {
       // Startbyn: grundförsvar och byns mur.
       const vc = s.cfg.village || CONFIG.village, tw = s.towns[i];
@@ -2889,6 +2944,31 @@ const Engine = (function () {
     return v;
   }
   function vp(p) { return p.vpMs / MINUTE; }
+  // ---- Lag (onlinelobbyn kan dela spelarna i två lag) ----
+  function teamOf(s, id) { const p = id && s.players[id]; return p && p.team != null ? p.team : null; }
+  // Samma spelare eller samma lag.
+  function ally(s, a, b) { if (!a || !b) return false; if (a === b) return true; const t = teamOf(s, a); return t != null && t === teamOf(s, b); }
+  // Lagets vinstpoäng (alla i laget tillsammans); utan lag spelarens egna.
+  function teamVp(s, id) {
+    const t = teamOf(s, id);
+    if (t == null) return vp(s.players[id]);
+    let x = 0;
+    for (const k of s.order) if (teamOf(s, k) === t) x += vp(s.players[k]);
+    return x;
+  }
+  // Färger med lag: lag 1 får de varma färgerna och lag 2 de kalla, så att det syns på kartan vem som hör ihop.
+  const TEAM_COLS = [[0, 4, 5, 7], [1, 6, 3, 2]];
+  function teamColorIdx(teams) {
+    const used = new Set(), out = [];
+    teams.forEach((t, i) => {
+      const pref = t == null ? [] : TEAM_COLS[t] || [];
+      let c = pref.find(x => !used.has(x));
+      if (c == null) c = [0, 1, 2, 3, 4, 5, 6, 7].find(x => !used.has(x));
+      if (c == null) c = i;
+      used.add(c); out.push(c);
+    });
+    return out;
+  }
   function spawnChanceAt(s, minute) { return Math.min(1, s.cfg.spawnBaseChance + s.cfg.spawnChancePerMinute * Math.max(0, minute - 1)); }
   function nextSpawnChance(s) { return spawnChanceAt(s, Math.round(s.nextSpawnAt / MINUTE / paceOf(s))); }
   // ---- Rutter ----
@@ -2903,7 +2983,7 @@ const Engine = (function () {
       const i = q[h];
       for (const j of s.tiles[i].adj) {
         if (seen[j]) continue;
-        if (j !== to && !any && s.tiles[j].owner !== pid) continue;
+        if (j !== to && !any && !passable(s, s.tiles[j], pid)) continue;
         seen[j] = 1; prev[j] = i;
         if (j === to) { const path = [to]; let k = to; while (k !== from) { k = prev[k]; path.push(k); } return path.reverse(); }
         q.push(j);
@@ -2950,9 +3030,11 @@ const Engine = (function () {
   // u: trupperna som skickas. Ett anfall mot en by med siegemen går i halv fart.
   function plan(s, pid, from, to, u) {
     const p = s.players[pid], t = s.tiles[to];
+    // Banditläger på en egen ruta: trupperna som står där anfaller direkt.
+    if (from === to) { if (!campOf(s, to, pid)) return null; const ms = attackMs(s, p); return { path: [from, to], legs: [ms], ms, attack: false, camp: true }; }
     const path = route(s, pid, from, to);
     if (!path || path.length < 2) return null;
-    const attack = !isMine(t, pid);
+    const attack = !standsOn(s, t, pid);
     let legs = legsFor(s, p, path, attack);
     const slow = attack && t.type === 'village' && u && u.siege > 0;
     if (slow) legs = legs.map(x => x * 2);
@@ -2988,9 +3070,10 @@ const Engine = (function () {
       const i = q[h];
       if (dist[i] >= bd) break;
       for (const j of s.tiles[i].adj) {
-        if (dist[j] >= 0 || s.tiles[j].owner !== pid) continue;
+        if (dist[j] >= 0 || !passable(s, s.tiles[j], pid)) continue;
         dist[j] = dist[i] + 1;
-        if (dist[j] < bd || (dist[j] === bd && j !== best && (j === prefer || (best !== prefer && j < best)))) { bd = dist[j]; best = j; }
+        // Lag: en lagkamrats ruta (inte byn) går också att stanna på.
+        if (standsOn(s, s.tiles[j], pid) && (dist[j] < bd || (dist[j] === bd && j !== best && (j === prefer || (best !== prefer && j < best))))) { bd = dist[j]; best = j; }
         q.push(j);
       }
     }
@@ -3030,7 +3113,9 @@ const Engine = (function () {
   function defendersAt(s, idx) {
     const t = s.tiles[idx];
     if (t.type === 'village') { const tw = s.towns[idx]; return tw ? U(tw.hu) : U(); }
-    return U(t.u);
+    const u = U(t.u);
+    if (t.al) for (const id in t.al) addTo(u, t.al[id]);
+    return u;
   }
   // Dimma: dina egna rutor och grannarna till de rutor du kontrollerar syns.
   function canSee(s, pid, idx) {
@@ -3039,7 +3124,17 @@ const Engine = (function () {
     if (t.hill) return true;            // kullen syns alltid för alla
     if (isMine(t, pid)) return true;
     for (const j of t.adj) if (s.tiles[j].owner === pid) return true;
-    return towerNear(s, pid, idx, 1);
+    if (towerNear(s, pid, idx, 1)) return true;
+    // Lag: det lagkamraterna ser syns också.
+    if (s.teams && teamOf(s, pid) != null) {
+      for (const id of s.order) {
+        if (id === pid || !ally(s, id, pid)) continue;
+        if (isMine(t, id)) return true;
+        for (const j of t.adj) if (s.tiles[j].owner === id) return true;
+        if (towerNear(s, id, idx, 1)) return true;
+      }
+    }
+    return false;
   }
   // Ett eget utkikstorn (minst nivå lvl) två rutor bort från idx (via en ruta mellan som inte är hav eller en by).
   function towerNear(s, pid, idx, lvl) {
@@ -3057,8 +3152,8 @@ const Engine = (function () {
     return { from: path[n - 2], start: a.depart + (n > 2 ? legs[n - 3] : 0) };
   }
   function armyVisible(s, pid, a, time) {
-    if (a.owner === pid || s.winner || (a.seen && a.seen.includes(pid))) return true;
-    if (a.kind !== 'move') return canSee(s, pid, a.from) || canSee(s, pid, a.to);
+    if (a.owner === pid || s.winner || (a.seen && a.seen.includes(pid)) || ally(s, a.owner, pid)) return true;
+    if (a.kind !== 'move' && a.kind !== 'camp') return canSee(s, pid, a.from) || canSee(s, pid, a.to);
     const L = lastLeg(a);
     if ((time != null ? time : s.time) < L.start) return false;
     return canSee(s, pid, a.to) || canSee(s, pid, L.from);
@@ -3075,8 +3170,9 @@ const Engine = (function () {
     if (isMine(tt, pid)) return 'Rutan är redan din.';
     if (tt.off) return 'Okänd ruta.';
     if (tt.type === 'village' && !tt.owner) return 'Ingen bor här än.';
-    if (!tt.adj.some(i => s.tiles[i].owner === pid) && !towerNear(s, pid, to, 2)) return 'Du kan bara anfalla en ruta som gränsar till en ruta du kontrollerar (eller två rutor från ett utkikstorn nivå 2).';
+    if (!tt.adj.some(i => passable(s, s.tiles[i], pid)) && !towerNear(s, pid, to, 2)) return 'Du kan bara anfalla en ruta som gränsar till en ruta du kontrollerar (eller två rutor från ett utkikstorn nivå 2).';
     const other = tt.owner || tt.occ;
+    if (other && other !== pid && ally(s, other, pid)) return 'Ni är i samma lag.';
     if (other && other !== pid && safeAt(s, tt)) return 'Rutan är skyddad av Fribo en stund till.';
     if (other && other !== pid) {
       if (immune(s, other)) return 'Spelaren är immun en stund till.';
@@ -3093,6 +3189,17 @@ const Engine = (function () {
   function attackSources(s, pid, to) { return s.tiles[to].adj.filter(i => s.tiles[i].owner === pid); }
   // Var trupperna på en ruta finns: byn (hu) eller rutan (u).
   function srcUnits(s, idx) { const t = s.tiles[idx]; return t.type === 'village' ? s.towns[idx].hu : t.u; }
+  // En viss spelares trupper på rutan (på en lagkamrats ruta: de parkerade). Objektet ändras när trupper skickas.
+  function srcUnitsOf(s, idx, pid) {
+    const t = s.tiles[idx];
+    if (t.type === 'village') return t.owner === pid ? s.towns[idx].hu : U();
+    if (isMine(t, pid)) return t.u;
+    if (!parkable(s, t, pid)) return U();
+    t.al = t.al || {};
+    return t.al[pid] || (t.al[pid] = U());
+  }
+  // Banditlägret på rutan om spelaren ser det (bara ägaren), annars null.
+  function campOf(s, idx, pid) { const t = s.tiles[idx]; return t && t.camp && t.camp.pid === pid && t.owner === pid && t.camp.n > 0 ? t.camp : null; }
 
   // ---- Strid ----
   // Anfallspoäng = Σ antal × anfall × bonus, försvarspoäng likadant med försvar (+ platt bonus).
@@ -3263,19 +3370,20 @@ const Engine = (function () {
         // Till en egen ruta = förflyttning, annars anfall (målet måste gränsa till en ruta du kontrollerar).
         const ft = s.tiles[a.from], tt = s.tiles[a.to];
         if (!ft || !tt) return fail('Okänd ruta.');
-        if (a.from === a.to) return fail('Välj en annan ruta.');
-        if (!isMine(ft, p.id)) return fail('Du har inga trupper där.');
-        const src = srcUnits(s, a.from);
+        if (a.from === a.to && !(a.camp && campOf(s, a.to, p.id))) return fail('Välj en annan ruta.');
+        if (!standsOn(s, ft, p.id)) return fail('Du har inga trupper där.');
+        if (a.camp && !campOf(s, a.to, p.id)) return fail('Det finns inget banditläger där.');
+        const src = srcUnitsOf(s, a.from, p.id);
         const u = a.units ? U(a.units) : pick(src, Math.floor(a.count || 0), ATK);
         for (const k of UNIT_KEYS) u[k] = Math.max(0, Math.floor(u[k] || 0));
         if (total(u) < 1) return fail('Välj minst en trupp.');
         if (!hasUnits(src, u)) return fail('Så många finns inte där.');
-        if (!isMine(tt, p.id)) { const why = attackBlock(s, p.id, a.to); if (why) return fail(why); }
+        if (!standsOn(s, tt, p.id)) { const why = attackBlock(s, p.id, a.to); if (why) return fail(why); }
         const pl = plan(s, p.id, a.from, a.to, u);
         if (!pl) return fail('Det finns ingen väg dit genom dina rutor.');
         subFrom(src, u);
         if (ft.type === 'village') syncTown(s.towns[a.from]); else syncTile(ft);
-        const ar = makeArmy(s, p.id, pl.path, pl.legs, u, pl.attack ? 'attack' : 'move');
+        const ar = makeArmy(s, p.id, pl.path, pl.legs, u, a.camp ? 'camp' : pl.attack ? 'attack' : 'move');
         if (pl.attack && a.stay) ar.stay = true;   // "stanna och försvara": de överlevande blir kvar på rutan
         s.armies.push(ar);
         return ok({ ms: pl.ms });
@@ -3309,14 +3417,14 @@ const Engine = (function () {
       case 'recall': {
         // Hem till byn från en ruta (förflyttning, 15 s per ruta).
         const t = s.tiles[a.tile];
-        if (!t || t.type === 'village' || !isMine(t, p.id)) return fail('Du har inga trupper där.');
+        if (!t || t.type === 'village' || !standsOn(s, t, p.id)) return fail('Du har inga trupper där.');
         const n = recallTile(s, p, a.tile, a.half);
         if (!n) return fail('Inga trupper står där.');
         return ok({ count: n });
       }
       case 'recallAll': {
         let n = 0;
-        s.tiles.forEach((t, i) => { if (t.type !== 'village' && isMine(t, p.id) && t.troops > 0) n += recallTile(s, p, i, false); });
+        s.tiles.forEach((t, i) => { if (t.type !== 'village' && standsOn(s, t, p.id) && total(srcUnitsOf(s, i, p.id)) > 0) n += recallTile(s, p, i, false); });
         if (!n) return fail('Inga trupper står på dina rutor.');
         return ok({ count: n });
       }
@@ -3346,11 +3454,11 @@ const Engine = (function () {
   }
   function buildPending(tw, key) { let n = 0; for (const x of tw.bq || []) if (x.key === key) n++; return n; }
   function recallTile(s, p, idx, half) {
-    const t = s.tiles[idx];
-    const u = half ? pick(t.u, Math.floor(t.troops / 2), ['berserker', 'soldier', 'shield']) : U(t.u);
+    const t = s.tiles[idx], src = srcUnitsOf(s, idx, p.id);
+    const u = half ? pick(src, Math.floor(total(src) / 2), ['berserker', 'soldier', 'shield']) : U(src);
     const n = total(u);
-    if (!n) return 0;
-    subFrom(t.u, u); syncTile(t);
+    if (!n) { syncTile(t); return 0; }
+    subFrom(src, u); syncTile(t);
     sendHome(s, p, idx, u);
     return n;
   }
@@ -3375,6 +3483,10 @@ const Engine = (function () {
     }
 
     while (s.time >= s.nextSpawnAt) { spawnRound(s); s.nextSpawnAt += MINUTE * paceOf(s); }
+    if (s.nextCampAt != null) {
+      for (const t of s.tiles) if (t.camp && t.camp.pid !== t.owner) delete t.camp;   // någon annan tog rutan: lägret försvinner
+      while (s.time >= s.nextCampAt) { campRound(s); s.nextCampAt += cfg.camp.every * MINUTE * paceOf(s); }
+    }
 
     for (const id of s.order) {
       const p = s.players[id];
@@ -3387,11 +3499,21 @@ const Engine = (function () {
     for (const id of s.order) {
       const p = s.players[id];
       p.vpMs += vpPerMinute(s, p) * dt;
-      if (!s.winner && cfg.vpToWin && p.vpMs >= cfg.vpToWin * MINUTE) {
+      if (!s.winner && cfg.vpToWin && !s.teams && p.vpMs >= cfg.vpToWin * MINUTE) {
         p.vpMs = cfg.vpToWin * MINUTE;
         s.winner = id;
         s.endedAt = s.time;
         log(s, { kind: 'win', player: id });
+      }
+    }
+    if (s.teams && !s.winner && cfg.vpToWin) {
+      for (const tm of [0, 1]) {
+        const ids = s.order.filter(id => teamOf(s, id) === tm);
+        if (!ids.length || ids.reduce((x, id) => x + s.players[id].vpMs, 0) < cfg.vpToWin * MINUTE) continue;
+        const id = ids.sort((a, b) => s.players[b].vpMs - s.players[a].vpMs)[0];
+        s.winner = id; s.winTeam = tm; s.endedAt = s.time;
+        log(s, { kind: 'win', player: id, team: tm });
+        break;
       }
     }
     endWeek(s);
@@ -3411,7 +3533,7 @@ const Engine = (function () {
     let hit = false;
     for (let i = 0; i < att.length; i++) for (let j = i + 1; j < att.length; j++) {
       const a = att[i], b = att[j];
-      if (a.owner === b.owner || !a.count || !b.count) continue;
+      if (ally(s, a.owner, b.owner) || !a.count || !b.count) continue;
       const la = curLeg(a, s.time), lb = curLeg(b, s.time);
       if (la.u === lb.v && la.v === lb.u) {
         // Samma vägsträcka från var sitt håll: hur långt var och en har kommit. De möts när summan når 1.
@@ -3512,9 +3634,10 @@ const Engine = (function () {
   }
 
   // Trupper slår sig ner på en egen ruta (byn eller rutan).
-  function join(s, idx, u) {
+  function join(s, idx, u, pid) {
     const t = s.tiles[idx];
     if (t.type === 'village') { addTo(s.towns[idx].hu, u); syncTown(s.towns[idx]); }
+    else if (pid && parkable(s, t, pid)) { addTo(srcUnitsOf(s, idx, pid), u); syncTile(t); }
     else { addTo(t.u, u); syncTile(t); }
   }
   function arrive(s, a) {
@@ -3522,14 +3645,16 @@ const Engine = (function () {
     const t = s.tiles[a.to];
     const p = s.players[a.owner];
     if (!p) return;
-    // Framme på en egen ruta: trupperna stannar där (och lämnar av bytet).
-    if (isMine(t, p.id)) {
-      join(s, a.to, a.u);
+    // Banditlägret på en egen ruta: strid mot banditerna.
+    if (a.kind === 'camp' && campOf(s, a.to, p.id)) { campBattle(s, a, t, p); return; }
+    // Framme på en egen ruta (eller en lagkamrats): trupperna stannar där (och lämnar av bytet).
+    if (standsOn(s, t, p.id)) {
+      join(s, a.to, a.u, p.id);
       depositLoot(s, p, a.loot);
       log(s, { kind: 'reinforce', player: p.id, n: a.count, tile: a.to });
       return;
     }
-    if (a.kind === 'move' || (t.type === 'village' && !t.owner)) {
+    if (a.kind === 'move' || a.kind === 'camp' || (t.type === 'village' && !t.owner)) {
       // Förflyttningen kom fram till en ruta som inte längre är din: till närmaste ruta du kontrollerar.
       const back = retreat(s, p, a.to, a.u, a.loot, a.from);
       log(s, { kind: 'moveFail', player: p.id, n: a.count, tile: a.to, back });
@@ -3538,6 +3663,12 @@ const Engine = (function () {
     if (t.type === 'village') { villageRaid(s, a, t, p); return; }
     // Rutan skyddas av Fribo: anfallet vänder utan strid.
     const holder = t.owner || t.occ;
+    // En lagkamrats by: ingen strid, trupperna går till närmaste egna ruta.
+    if (holder && holder !== p.id && ally(s, holder, p.id)) {
+      const back = retreat(s, p, a.to, a.u, a.loot, a.from);
+      log(s, { kind: 'allyHeld', player: p.id, ally: holder, n: a.count, tile: a.to, back });
+      return;
+    }
     if (holder && holder !== p.id && safeAt(s, t)) {
       const back = retreat(s, p, a.to, a.u, a.loot, a.from, holder);
       log(s, { kind: 'bounce', player: p.id, defender: holder, tile: a.to, n: a.count, back, until: t.safeUntil });
@@ -3545,12 +3676,15 @@ const Engine = (function () {
     }
     // Anfall.
     const defender = t.owner || t.occ || null, dp = defender ? s.players[defender] : null;
-    const A = a.count, D = t.troops, aU0 = U(a.u), dU0 = U(t.u);
+    const A = a.count, D = t.troops, aU0 = U(a.u), dU0 = defendersAt(s, a.to);
     const aMul = attackVec(s, p, true);
     const def = tileDefense(s, a.to, true, p);
-    const r = D > 0 || def.flat > 0 ? battleUnits(s, a.u, t.u, aMul, def.mul, def.flat, null, def.sup)
+    const r = D > 0 || def.flat > 0 ? battleUnits(s, a.u, dU0, aMul, def.mul, def.flat, null, def.sup)
       : { aPow: round2(powerM(cfg, a.u, 'atk', aMul)), dPow: 0, aLoss: 0, dLoss: 0, aLossU: U(), dLossU: U() };
-    subFrom(t.u, r.dLossU); syncTile(t);
+    // Förlusterna fördelas på ägarens trupper och lagkamraternas (efter hur många av varje typ var och en hade).
+    const alLoss = splitLoss(t, r.dLossU);
+    for (const id in alLoss) { const ap = s.players[id], lu = alLoss[id]; if (!ap || !total(lu)) continue; addCorpses(s, ap, lu, true); ap.stats.lost += total(lu); ap.stats.battles++; }
+    syncTile(t);
     const survU = subFrom(U(a.u), r.aLossU), survivors = total(survU);
     addCorpses(s, p, r.aLossU); const revD = addCorpses(s, dp, r.dLossU, true);
     // Guld för dödade neutrala soldater hamnar i anfallarens by.
@@ -3605,6 +3739,54 @@ const Engine = (function () {
     gainExp(s, dp, expD);
   }
 
+  // Fördelar förlusterna på en ruta mellan ägarens trupper (t.u) och lagkamraternas (t.al). Drar av dem och
+  // returnerar lagkamraternas förluster ({ spelare: trupper }).
+  function splitLoss(t, lossU) {
+    const out = {}, ids = t.al ? Object.keys(t.al) : [];
+    if (!ids.length) { subFrom(t.u, lossU); return out; }
+    for (const id of ids) out[id] = U();
+    for (const k of UNIT_KEYS) {
+      let L = lossU[k] || 0;
+      if (!L) continue;
+      const groups = [{ u: t.u, id: null }].concat(ids.map(id => ({ u: t.al[id], id }))).filter(g => (g.u[k] || 0) > 0);
+      const all = groups.reduce((x, g) => x + g.u[k], 0);
+      // Avrundat nedåt efter andel, resten till de största grupperna.
+      const take = groups.map(g => Math.min(g.u[k], Math.floor(L * g.u[k] / all)));
+      let left = L - take.reduce((x, y) => x + y, 0);
+      const ord = groups.map((g, i) => i).sort((x, y) => groups[y].u[k] - take[y] - (groups[x].u[k] - take[x]));
+      for (const i of ord) { if (left <= 0) break; const more = Math.min(left, groups[i].u[k] - take[i]); take[i] += more; left -= more; }
+      groups.forEach((g, i) => { g.u[k] -= take[i]; if (g.id) out[g.id][k] += take[i]; });
+    }
+    return out;
+  }
+  // Banditlägret: som ett anfall mot en neutral ruta (guld och exp för varje dödad bandit). De överlevande stannar på rutan.
+  function campBattle(s, a, t, p) {
+    const cfg = s.cfg, camp = t.camp, dU = U({ soldier: camp.n }), A = a.count, D = camp.n, aU0 = U(a.u);
+    const aMul = attackVec(s, p, true);
+    const r = battleUnits(s, a.u, dU, aMul, 1, 0, null, 1);
+    camp.n -= r.dLoss;
+    const survU = subFrom(U(a.u), r.aLossU), survivors = total(survU);
+    addCorpses(s, p, r.aLossU);
+    const homeTown = s.towns[p.village], loot = r.dLoss * cfg.killReward, before = homeTown.gold;
+    homeTown.gold = Math.min(goldCap(s, homeTown), homeTown.gold + loot);
+    const lootKept = Math.round(homeTown.gold - before);
+    p.stats.battles++; p.stats.killed += r.dLoss; p.stats.lost += r.aLoss; p.stats.loot += lootKept;
+    const expA = r.dLoss * cfg.expPerNeutralKill, cleared = camp.n <= 0;
+    if (cleared) delete t.camp;
+    if (survivors > 0) join(s, a.to, survU, p.id);
+    log(s, { kind: 'battle', camp: true, cleared, player: p.id, defender: null, tile: a.to, from: a.from, A, D,
+      aU: aU0, dU, aLossU: r.aLossU, dLossU: r.dLossU, aPow: r.aPow, dPow: r.dPow, aLoss: r.aLoss, dLoss: r.dLoss,
+      loot, lootKept, captured: false, occupied: false, survivors, stay: survivors, back: -1, flat: 0, expA, expD: 0, left: camp.n > 0 ? camp.n : 0 });
+    gainExp(s, p, expA);
+  }
+  // Banditläger dyker upp på rutor som spelare kontrollerar (inte byar och kullen). Bara ägaren ser dem.
+  function campRound(s) {
+    const c = s.cfg.camp, n = 1 + Math.floor(s.time / MINUTE / paceOf(s) / c.perMinutes);
+    for (const t of s.tiles) {
+      if (!t.owner || t.type === 'village' || t.hill || t.off || t.camp) continue;
+      if (rand(s) < c.chance) { t.camp = { pid: t.owner, n, at: s.time }; log(s, { kind: 'camp', player: t.owner, tile: t.id, n }); }
+    }
+  }
   // Nya neutrala soldater på rutor som ingen har.
   // Anfall mot en startby: trupperna hemma försvarar (med grundförsvar och mur). Vinner anfallaren
   // plundrar de överlevande byn och går tillbaka till rutan de kom ifrån med bytet. Byn kan inte tas.
@@ -3704,16 +3886,40 @@ const Engine = (function () {
 
     const mine = [];
     s.tiles.forEach((t, i) => { if (t.owner === p.id) mine.push(i); });
-    const hostileNear = i => s.tiles[i].adj.some(j => { const o = s.tiles[j].owner || s.tiles[j].occ; return o && o !== p.id; });
+    const hostileNear = i => s.tiles[i].adj.some(j => { const o = s.tiles[j].owner || s.tiles[j].occ; return o && !ally(s, o, p.id); });
     const neutralNear = i => s.tiles[i].adj.some(j => { const t = s.tiles[j]; return !t.owner && !t.occ && t.type !== 'village'; });
     // Vakt på gränsrutor: efter hur många fiender som står på grannrutorna (de syns), högst guard.
     const guard = Math.min(10, 3 + Math.floor(min / 8));
-    const threatAt = i => Math.max(0, ...s.tiles[i].adj.map(j => { const t = s.tiles[j], o = t.owner || t.occ; return o && o !== p.id ? seenAt(j) : 0; }));
+    const threatAt = i => Math.max(0, ...s.tiles[i].adj.map(j => { const t = s.tiles[j], o = t.owner || t.occ; return o && !ally(s, o, p.id) ? seenAt(j) : 0; }));
     const keepAt = i => !hostileNear(i) ? 0 : Math.min(guard + (s.tiles[i].hill ? 6 : 0), Math.ceil(threatAt(i) * (s.tiles[i].hill ? 1 : 0.7)) + 1);
     const here = i => srcUnits(s, i);
+    const old = !!p.oldBot;   // bara för jämförelser: bottarna före v50
+    const KP = old ? KEEP : BKEEP, DF = old ? DEF : BDEF;
+    const defN = u => DF.reduce((x, k) => x + (u[k] || 0), 0);   // trupper som duger att försvara med
+    const front = mine.filter(i => s.tiles[i].type !== 'village' && hostileNear(i));
+    // 1a. Trupper som hamnat på en lagkamrats ruta (efter ett anfall) går till närmaste egna ruta, där boten använder dem.
+    if (s.teams) for (const t of s.tiles) {
+      const g = t.al && t.al[p.id];
+      if (!g || !total(g)) continue;
+      const to = mine.filter(i => isFinite(sendMs(s, p.id, t.id, i))).sort((a, b) => sendMs(s, p.id, t.id, a) - sendMs(s, p.id, t.id, b))[0];
+      if (to != null) act({ type: 'send', from: t.id, to, units: U(g) });
+    }
+    // 1b. Banditläger på egna rutor: rensas när trupperna på rutan (eller på en ruta nära) räcker. De överlevande stannar på rutan.
+    if (!old) for (const i of mine) {
+      const cp = campOf(s, i, p.id);
+      if (!cp || s.armies.some(a => a.owner === p.id && a.kind === 'camp' && a.to === i)) continue;
+      const dU = U({ soldier: cp.n }), aM = attackVec(s, p, true), O = ['berserker', 'draug', 'soldier', 'shield'];
+      const near = mine.filter(x => x !== i && isFinite(sendMs(s, p.id, x, i))).sort((a, b) => sendMs(s, p.id, a, i) - sendMs(s, p.id, b, i)).slice(0, 3);
+      for (const src of [i].concat(near)) {
+        const have = U(here(src)), need = fillAttack(s, have, dU, aM, 1, O, 0);
+        if (!need) continue;
+        const send = addTo(U(need), pick(subFrom(U(have), need), 1, O));
+        if (act({ type: 'send', from: src, to: i, units: send, camp: true }).ok) break;
+      }
+    }
 
     // 2. Försvar: förstärk rutor som fiender är på väg mot.
-    const hostile = s.armies.filter(a => a.owner !== p.id && a.kind === 'attack' && s.tiles[a.to].owner === p.id);
+    const hostile = s.armies.filter(a => !ally(s, a.owner, p.id) && a.kind === 'attack' && s.tiles[a.to].owner === p.id);
     if (prof.defend) {
       for (const idx of new Set(hostile.map(a => a.to))) {
         const t = s.tiles[idx];
@@ -3730,15 +3936,21 @@ const Engine = (function () {
           .filter(i => i !== idx && s.time + moveMs(s, p, i, idx) < first && !hostile.some(a => a.to === i))
           .sort((a, b) => hops(s, a, idx) - hops(s, b, idx));
         for (const src of srcs) {
-          const left = subFrom(U(here(src)), pick(here(src), keepAt(src), KEEP));
+          const left = subFrom(U(here(src)), pick(here(src), keepAt(src), KP));
           const add = U();
           while (total(add) < 200 && !holds(addTo(U(have), add))) {
-            const k = DEF.find(x => left[x] > 0);
+            const k = DF.find(x => left[x] > 0);
             if (!k) break;
             left[k]--; add[k]++;
           }
           if (total(add) > 0 && act({ type: 'send', from: src, to: idx, units: add }).ok) addTo(have, add);
           if (holds(have)) break;
+        }
+        // Håller rutan ändå inte går berserkerna därifrån i stället för att dö i försvaret (till närmaste egna ruta som inte anfalls).
+        const bz = t.type === 'village' ? 0 : (t.u.berserker || 0);
+        if (!old && bz > 0 && !holds(have)) {
+          const safe = mine.filter(i => i !== idx && !hostile.some(a => a.to === i) && isFinite(moveMs(s, p, idx, i))).sort((a, b) => moveMs(s, p, idx, a) - moveMs(s, p, idx, b))[0];
+          if (safe != null) act({ type: 'send', from: idx, to: safe, units: U({ berserker: bz }) });
         }
       }
     }
@@ -3746,7 +3958,9 @@ const Engine = (function () {
     // 3. Utposter (före byns ekonomi när de lönar sig), sedan ekonomi i byn.
     const st = p.postStrat || cfg.botPost || CONFIG.botPost;
     if (st.strat !== 'old') botPosts(s, p, tw, min, mine, hostileNear, act, st, hostile.length > 0);
-    botEconomy(s, p, tw, prof, act, rnd, min);
+    // Försvarare som gränsen behöver (vakterna på gränsrutorna och i byn).
+    const needDef = front.reduce((x, i) => x + Math.min(40, guard + (s.tiles[i].hill ? 6 : 0)), 0) + keepAt(p.village);
+    botEconomy(s, p, tw, prof, act, rnd, min, old ? -1 : needDef);
     if (st.strat === 'old' && min > 8) {
       // Det gamla sättet (bara för jämförelser): sent och med stor buffert.
       const posts = mine.filter(i => s.tiles[i].post).sort((a, b) => (hostileNear(b) - hostileNear(a)) || s.tiles[a].post.lvl - s.tiles[b].post.lvl);
@@ -3767,18 +3981,18 @@ const Engine = (function () {
     const byVp = s.order.slice().sort((x, y) => vp(s.players[y]) - vp(s.players[x]));
     const leader = byVp[0], lead = byVp.length > 1 ? vp(s.players[byVp[0]]) - vp(s.players[byVp[1]]) : 0;
     const panic = botPanic(s, p, mine, min);
-    const ORD = panic ? ATK : ['berserker', 'soldier'];
+    const ORD = panic ? ATK : old ? ['berserker', 'soldier'] : ['draug', 'berserker', 'soldier'];
     const atkOnly = u => { const o = U(); for (const k of ORD) o[k] = u[k] || 0; return o; };
     const busy = new Set(s.armies.filter(a => a.owner === p.id && a.kind === 'attack').map(a => a.to));
     // Mot kullen vågar boten mer: bara halva vakten stannar kvar.
     const keepFor = (i, hill) => hill ? Math.floor(keepAt(i) / 2) : keepAt(i);
-    const availAt = (i, hill) => atkOnly(subFrom(U(here(i)), pick(here(i), keepFor(i, hill), KEEP)));
+    const availAt = (i, hill) => atkOnly(subFrom(U(here(i)), pick(here(i), keepFor(i, hill), KP)));
     const poolsFor = hill => mine.concat(s.tiles.map((t, i) => i).filter(i => s.tiles[i].occ === p.id))
       .map(i => ({ i, avail: availAt(i, hill) })).filter(x => total(x.avail) > 0)
       .sort((a, b) => total(b.avail) - total(a.avail));
     const pools = poolsFor(false), hillPools = poolsFor(true);
     const H = s.tiles.findIndex(t => t.hill);
-    const hillOwner = H >= 0 && s.tiles[H].owner && s.tiles[H].owner !== p.id ? s.tiles[H].owner : null;
+    const hillOwner = H >= 0 && s.tiles[H].owner && !ally(s, s.tiles[H].owner, p.id) ? s.tiles[H].owner : null;
     let hillOk = H >= 0 && busy.has(H);
     const defGuess = (j, owner, eta) => {
       const t = s.tiles[j], dU = U(defendersAt(s, j));
@@ -3935,16 +4149,16 @@ const Engine = (function () {
     }
 
     // 5. Vakter: trupper i byn och på inre rutor går till gränsrutor mot fiender som har för få.
-    const front = mine.filter(i => s.tiles[i].type !== 'village' && hostileNear(i));
     if (front.length) {
-      const want = i => Math.min(40, guard + (s.tiles[i].hill ? 6 : 0)) - total(s.tiles[i].u) - s.armies.filter(a => a.owner === p.id && a.to === i).reduce((k, a) => k + a.count, 0);
+      const cnt = old ? total : defN;
+      const want = i => Math.min(40, guard + (s.tiles[i].hill ? 6 : 0)) - cnt(s.tiles[i].u) - s.armies.filter(a => a.owner === p.id && a.to === i).reduce((k, a) => k + cnt(a.u), 0);
       const W = new Map(front.map(i => [i, want(i)]));
       const needy = front.filter(i => W.get(i) > 0).sort((a, b) => W.get(a) - W.get(b));
-      const spare = i => s.tiles[i].type === 'village' || !W.has(i) ? total(here(i)) - keepAt(i) : -W.get(i);
+      const spare = i => s.tiles[i].type === 'village' || !W.has(i) ? cnt(here(i)) - keepAt(i) : -W.get(i);
       for (const dst of needy.slice(0, prof.rotate || 3)) {
         const src = mine.filter(i => i !== dst && spare(i) > 0 && !(p.camp && i === p.camp.stage) && !(p.plan && i === p.plan.stage) && isFinite(sendMs(s, p.id, i, dst))).sort((a, b) => sendMs(s, p.id, a, dst) - sendMs(s, p.id, b, dst))[0];
         if (src == null) break;
-        const u = pick(here(src), Math.min(spare(src), Math.max(1, W.get(dst))), DEF);
+        const u = pick(here(src), Math.min(spare(src), Math.max(1, W.get(dst))), DF);
         if (total(u) > 0 && act({ type: 'send', from: src, to: dst, units: u }).ok && W.has(src)) W.set(src, W.get(src) + total(u));
       }
     }
@@ -3962,7 +4176,7 @@ const Engine = (function () {
     for (const j of Array.from(near)) for (const k of s.tiles[j].adj) near.add(k);
     for (const i of near) {
       const t = s.tiles[i], o = t.owner || t.occ;
-      if (!o || o === p.id) { delete mem[i]; continue; }
+      if (!o || ally(s, o, p.id)) { delete mem[i]; continue; }
       const n = total(defendersAt(s, i));
       if (n > 0 && n >= eff(i)) mem[i] = [n, s.time];
     }
@@ -3974,10 +4188,11 @@ const Engine = (function () {
   function botPanic(s, p, mine, min) {
     const cfg = s.cfg;
     let top = null;
-    for (const id of s.order) if (id !== p.id && (!top || vp(s.players[id]) > vp(top))) top = s.players[id];
+    for (const id of s.order) if (!ally(s, id, p.id) && (!top || teamVp(s, id) > teamVp(s, top.id))) top = s.players[id];
     if (!top) return false;
-    if (cfg.vpToWin && vp(top) >= 0.8 * cfg.vpToWin && vp(top) > vp(p)) return true;
-    if (cfg.endAfterMs && s.time >= 0.9 * cfg.endAfterMs && vp(top) > vp(p)) return true;
+    const vt = teamVp(s, top.id), vm = teamVp(s, p.id);   // utan lag samma som vp()
+    if (cfg.vpToWin && vt >= 0.8 * cfg.vpToWin && vt > vm) return true;
+    if (cfg.endAfterMs && s.time >= 0.9 * cfg.endAfterMs && vt > vm) return true;
     return min >= 15 && mine.length <= 1;
   }
 
@@ -4021,7 +4236,7 @@ const Engine = (function () {
     }
   }
 
-  function botEconomy(s, p, tw, prof, act, rnd, min) {
+  function botEconomy(s, p, tw, prof, act, rnd, min, needDef) {
     const cfg = s.cfg, B = tw.buildings;
     const costOf = k => upgradeCost(s, k, B[k]);
     const canUp = k => !atMax(cfg.buildings[k], B[k]) && !(tw.bq && tw.bq.some(x => x.key === k)) && (!cfg.build || (tw.bq || []).length < cfg.build.queue);
@@ -4035,11 +4250,21 @@ const Engine = (function () {
       let kind = 'soldier';
       const cap = 8 - tw.queue;
       const all = armyUnits(s, p);
+      const defHave = all.shield + all.soldier + all.draug;
       if (tw.unlocked.shield && all.shield < 3 + Math.floor(min / 4)) kind = 'shield';
+      // Har gränsen för få försvarare tränas sköldgrabbar (eller soldater) i stället för berserkers.
+      else if (needDef >= 0 && tw.unlocked.berserker && defHave < needDef) kind = tw.unlocked.shield ? 'shield' : 'soldier';
       else if (tw.unlocked.berserker) kind = rnd() < 0.7 ? 'berserker' : 'soldier';
       const n = Math.min(Math.floor(Math.max(0, tw.gold - reserve) / cfg.units[kind].cost), cap);
       if (n > 0) act({ type: 'train', unit: kind, count: n });
     };
+    // Draugar: varje lik blir en draug för 5 guld (billigare anfall än någon annan trupp). Kryptan byggs när liken börjar samlas.
+    const raise = () => {
+      if (needDef < 0 || !(B.crypt >= 1)) return;
+      const n = Math.min(Math.floor(p.corpses || 0), Math.floor(Math.max(0, tw.gold - reserve) / cfg.units.draug.cost), 12 - (tw.cq || 0));
+      if (n > 0) act({ type: 'raise', count: n });
+    };
+    raise();
     // Nödträning först bara om armén är mycket liten; annars får byggena gå före och resten tränas sist.
     if (tArmy + tw.queue < 4 + Math.min(min, 120) * 0.15) train();
     const payback = costOf('goldmine') / (prodAtLevel(s, B.goldmine + 1) - prodAtLevel(s, B.goldmine)) * 60 / paceOf(s);
@@ -4067,6 +4292,10 @@ const Engine = (function () {
       }
     }
     if (mineItem && min <= 20) invest.push(mineItem);
+    if (needDef >= 0 && cfg.buildings.crypt && B.barracks > 0 && canUp('crypt')) {
+      if (!B.crypt && (p.corpses || 0) >= 5) invest.push(['crypt', costOf('crypt'), () => up('crypt')]);
+      else if (B.crypt && B.crypt < 3 && (p.corpses || 0) >= 12 * B.crypt) invest.push(['crypt', costOf('crypt'), () => up('crypt')]);
+    }
     if (prof.research && min > 15 && tArmy >= 6 + Math.min(min, 120) * 0.15) {
       if (B.workshop < Math.min(cfg.buildings.workshop.max, Math.floor(min / 15))) invest.push(['workshop', costOf('workshop'), () => up('workshop')]);
       else if (resQueueLen(tw) === 0) {
@@ -4078,7 +4307,7 @@ const Engine = (function () {
     }
     if (mineItem && min > 20) invest.push(mineItem);
     // Mur runt byn när andra spelare har rutor bredvid den.
-    const enemyNear = s.tiles[p.village].adj.some(j => { const o = s.tiles[j].owner || s.tiles[j].occ; return o && o !== p.id; });
+    const enemyNear = s.tiles[p.village].adj.some(j => { const o = s.tiles[j].owner || s.tiles[j].occ; return o && !ally(s, o, p.id); });
     if (enemyNear && cfg.buildings.wall && canUp('wall') && (B.wall || 0) < Math.min(cfg.buildings.wall.max, 1 + Math.floor(min / 15))) invest.push(['wall', costOf('wall'), () => up('wall')]);
     if (canUp('treasury') && (tw.gold >= goldCap(s, tw) * 0.9 || invest.some(x => x[1] > goldCap(s, tw)))) invest.unshift(['treasury', costOf('treasury'), () => up('treasury')]);
     for (const [, c, buy] of invest) {
@@ -4090,6 +4319,7 @@ const Engine = (function () {
     // Armémålet slutar växa efter två timmars speltid (annars sparar veckospelets bottar aldrig).
     const am = prof.army || [10, 0.5];
     if (soldierCount(s, p) + tw.queue < am[0] + Math.min(min, 120) * am[1]) reserve = 0;
+    raise();
     train();
   }
 
@@ -4101,6 +4331,12 @@ const Engine = (function () {
       for (const k in CONFIG.skills) s.cfg.skills[k] = Object.assign({}, CONFIG.skills[k], s.cfg.skills[k] || {});   // nya färdigheter och nya fält (t.ex. Byggmästarens extra nivåer)
       for (const id in s.players || {}) { const p = s.players[id]; if (p.skills) for (const k in s.cfg.skills) if (p.skills[k] == null) p.skills[k] = 0; }
     }
+    // v51: draugar 0,9 i anfall och halva tiden i kryptan; banditläger (inte i veckospelet).
+    if (s && s.cfg && s.cfg.units && s.cfg.units.draug && s.cfg.units.draug.atk === 1) s.cfg.units.draug.atk = CONFIG.units.draug.atk;
+    if (s && s.cfg && s.cfg.crypt && (s.cfg.crypt.trainSeconds === 20 || (s.tut && s.cfg.crypt.trainSeconds === 10))) s.cfg.crypt.trainSeconds /= 2;
+    if (s && s.cfg && !s.week && !s.cfg.camp) { s.cfg.camp = Object.assign({}, CONFIG.camp); s.nextCampAt = Math.max(s.cfg.camp.from * MINUTE * paceOf(s), (s.time || 0) + s.cfg.camp.every * MINUTE * paceOf(s)); }
+    // v50: forskningscentrets upplåsningar tar halva tiden.
+    if (s && s.cfg && (s.cfg.unlockMinutes === 2 || (s.tut && s.cfg.unlockMinutes === 0.5))) s.cfg.unlockMinutes /= 2;
     // v48: verkstaden +8 % per nivå, byns guldgruva +20 %, ekonomicentrum 10 guld billigare per nivå.
     if (s && s.cfg) {
       if (s.cfg.researchBonusPerLevel === 0.06) s.cfg.researchBonusPerLevel = CONFIG.researchBonusPerLevel;
@@ -4141,7 +4377,8 @@ const Engine = (function () {
   function encodeView(s, pid, logFrom, max) {
     const num = id => id ? s.order.indexOf(id) + 1 : 0;
     // Dimma: vem som äger en ruta syns alltid, men trupperna bara på rutor som gränsar till spelarens.
-    const tl = s.tiles.map((t, i) => [num(t.owner), num(t.occ), canSee(s, pid, i) ? uArr(defendersAt(s, i)) : 0, t.post ? [t.post.lvl, t.post.wall, t.post.tower || 0] : 0, t.type === 'village' ? 1 : 0, t.held != null ? t.held : null, t.mineLvl || 0, safeAt(s, t) ? t.safeUntil : 0]);
+    const tl = s.tiles.map((t, i) => { const see = canSee(s, pid, i); return [num(t.owner), num(t.occ), see ? uArr(t.type === 'village' ? defendersAt(s, i) : t.u) : 0, t.post ? [t.post.lvl, t.post.wall, t.post.tower || 0] : 0, t.type === 'village' ? 1 : 0, t.held != null ? t.held : null, t.mineLvl || 0, safeAt(s, t) ? t.safeUntil : 0,
+      see && t.al ? Object.keys(t.al).map(id => [num(id), uArr(t.al[id])]) : 0, campOf(s, i, pid) ? t.camp.n : 0]; });
     const tw = [];
     for (const k in s.towns) {
       const x = s.towns[k];
@@ -4152,32 +4389,36 @@ const Engine = (function () {
       const p = s.players[id];
       if (id === pid) return Object.assign({}, p);
       return { id, name: p.name, villageName: p.villageName, color: p.color, hi: p.hi, bot: p.bot, avatar: p.avatar, village: p.village, towns: p.towns,
-        vpMs: p.vpMs, level: p.level, skills: p.skills, immuneUntil: p.immuneUntil || 0 };
+        vpMs: p.vpMs, level: p.level, skills: p.skills, up: p.up, team: p.team, immuneUntil: p.immuneUntil || 0 };
     });
     const ar = [];
     for (const a of s.armies) {
       if (a.owner === pid || (a.seen && a.seen.includes(pid))) ar.push(a);   // egna, och fiendens trupper på väg hem efter ett anfall mot dig
       else if (armyVisible(s, pid, a, s.time)) {
         // Andras förflyttningar skickas bara från sista steget (det är allt man ser av dem).
-        const L = a.kind === 'move' ? lastLeg(a) : { from: a.from, start: a.depart };
-        ar.push({ id: a.id, owner: a.owner, from: L.from, to: a.to, path: [L.from, a.to], legs: [Math.max(1, a.arrive - L.start)], u: U(), count: 0, kind: a.kind, depart: L.start, arrive: a.arrive });
+        const L = a.kind === 'move' || a.kind === 'camp' ? lastLeg(a) : { from: a.from, start: a.depart };
+        ar.push({ id: a.id, owner: a.owner, from: L.from, to: a.to, path: [L.from, a.to], legs: [Math.max(1, a.arrive - L.start)], u: U(), count: 0, kind: a.kind === 'camp' ? 'move' : a.kind, depart: L.start, arrive: a.arrive });
       }
     }
     const lg = [];
     for (const e of s.log) if (e.id > (logFrom || 0) && logRelevant(s, e, pid)) lg.push(e);
-    return { t: s.time, ns: s.nextSpawnAt, nid: s.nextId, w: s.winner, e: s.endedAt, ord: s.order, tl, tw, pl, ar, lg: max ? lg.slice(-max) : lg };
+    return { t: s.time, ns: s.nextSpawnAt, nid: s.nextId, w: s.winner, e: s.endedAt, ord: s.order, tl, tw, pl, ar, lg: max ? lg.slice(-max) : lg, tm: s.teams ? 1 : 0 };
   }
   function decodeView(init, v, prevLog) {
     const cfg = init.cfg;
     const s = { v: VERSION, cfg, seed: init.seed, map: init.map, rng: 0, time: v.t, nextSpawnAt: v.ns, tiles: [], towns: {}, players: {}, order: v.ord.slice(),
       armies: v.ar, log: [], nextId: v.nid, winner: v.w, endedAt: v.e, online: true, view: true };
+    if (v.tm) s.teams = true;
     s.tiles = init.st.map((r, i) => ({ id: i, x: r[0], y: r[1], name: r[2], adj: r[3], cells: r[4], look: r[5], type: r[6], hill: !!r[7], mine: !!r[8], owner: null, occ: null, u: U(), troops: 0, post: null }));
     v.tl.forEach((r, i) => {
       const t = s.tiles[i];
       t.owner = r[0] ? v.ord[r[0] - 1] : null;
       t.occ = r[1] ? v.ord[r[1] - 1] : null;
       if (r[4]) t.type = 'village';
-      if (r[2] && t.type !== 'village') { t.u = arrU(r[2]); syncTile(t); }
+      if (r[2] && t.type !== 'village') t.u = arrU(r[2]);
+      if (r[8] && t.type !== 'village') { t.al = {}; for (const [n, ua] of r[8]) if (n) t.al[v.ord[n - 1]] = arrU(ua); }
+      if (t.type !== 'village') syncTile(t);
+      if (r[9] && t.owner) t.camp = { pid: t.owner, n: r[9] };
       if (r[3]) t.post = { lvl: r[3][0], wall: r[3][1], tower: r[3][2] || 0 };
       if (r[5] != null) t.held = r[5];
       if (r[6]) t.mineLvl = r[6];
@@ -4213,7 +4454,7 @@ const Engine = (function () {
     expToNext, skillBlock, treePoints, soldierCount, trainMs, canTrain, vpPerMinute, vp, countControlled,
     researchCost, researchMs, researchLevel, researchPending, nextResearch, resQueueLen, unitUnlocked,
     attackMult, defenseMult, attackVec, defenseVec, unitBonus, UNIT_UP, RES_KINDS,
-    spawnChanceAt, nextSpawnChance,
+    spawnChanceAt, nextSpawnChance, teamOf, ally, teamVp, teamColorIdx, standsOn, parkable, passable, srcUnitsOf, campOf,
   };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = Engine;
@@ -5090,7 +5331,69 @@ window.GP_EN = {
 " lik per nivå för varje draug som dör när du försvarar dig), <b>Mur av döda</b> (draugar +0,5 i försvar) och <b>Ensam är stark</b> (anfallarens bonus för överlägsenhet halveras när du försvarar dig, i byn och på dina rutor). Ekonomi: <b>Guldpost</b> (utposterna +": " corpses per level for each draug that dies while you defend), <b>Wall of the Dead</b> (draugs +0.5 defence) and <b>Stands Alone</b> (the attacker’s superiority bonus is halved when you defend, in the village and on your territories). Economy: <b>Gold Post</b> (outposts +",
 " · forskningscentret nivå ": " · research centre level ",
 "Från början": "From the start",
-"Tränas i barracken": "Trained in the barracks"
+"Tränas i barracken": "Trained in the barracks",
+" · lagkamrat": " · teammate",
+" skulle anfalla ": " were going to attack ",
+", men ": ", but ",
+" i ditt lag hade redan tagit rutan. De går hem till byn.": " on your team had already taken the territory. They are going home to the village.",
+" i ditt lag hade redan tagit rutan. De går till ": " on your team had already taken the territory. They are going to ",
+"Ert lag": "Your team",
+"Lag ": "Team ",
+"Lagets vinstpoäng (alla i laget tillsammans): ": "Team victory points (everyone on the team together): ",
+", varav dina ": ", of which yours ",
+". Tryck för ställningen.": ". Tap for the standings.",
+" (ditt lag)": " (your team)",
+"Lagen räknar vinstpoängen tillsammans, och det första laget till ": "Teams count their victory points together, and the first team to reach ",
+" vinner. Lagkamrater kan inte anfalla varandra och ser det de andra i laget ser. ": " wins. Teammates cannot attack each other and see what the others on their team see. ",
+" vinstpoäng vinner. ": " victory points wins. ",
+"Varje ruta ger 1 vinstpoäng per ": "Each territory gives its controller 1 victory point every ",
+"Ert lag (": "Your team (",
+") nådde ": ") reached ",
+" speltid. ": " of game time. ",
+" hade ": " had ",
+" speltid. Ert lag hade ": " of game time. Your team had ",
+"Till ": "To ",
+" spelare": " players",
+"Två lag": "Two teams",
+" · lagets vinstpoäng räknas tillsammans": " · team victory points count together",
+"Båda lagen behöver en spelare": "Both teams need a player",
+" startar spelet. ": " to start the game. ",
+"Det första laget till ": "The first team to reach ",
+" · två lag": " · two teams",
+"Ni är i samma lag.": "You are on the same team.",
+" Med <b>Två lag</b> väljer varje spelare lag, och värden placerar bottarna. Lagkamraterna börjar bredvid varandra, har färger ur samma familj, ser det de andra i laget ser och kan inte anfalla varandra. Lagets vinstpoäng räknas tillsammans, och det första laget till målet vinner.": " With <b>Two teams</b> each player picks a team and the host places the bots. Teammates start next to each other, get colours from the same family, see what the others on their team see and cannot attack each other. Team victory points count together, and the first team to reach the target wins.",
+" Dina anfall pulserar rött på kartan, så alla ser dem.": " Your attacks pulse red on the map, so everyone can see them.",
+" Spikarna syns vid dina utposter och din by.": " The spikes show at your outposts and your village.",
+"Järnspikar: +": "Iron spikes: +",
+" i grundförsvar på alla ägarens rutor.": " base defence on all the owner's territories.",
+"Järnspikar ": "Iron spikes ",
+" (här)": " (here)",
+"Banditläger": "Bandit camp",
+"banditer": "bandits",
+"bandit": "bandit",
+"Bara du ser lägret. Du måste inte anfalla det, men varje bandit du dödar ger ": "Only you can see the camp. You don't have to attack it, but every bandit you kill gives ",
+" guld och ": " gold and ",
+" exp. Trupperna som står på rutan kan anfalla direkt, och de som överlever stannar här. Tar någon annan rutan försvinner lägret.": " exp. Troops on the territory can attack right away, and survivors stay here. If someone else takes the territory, the camp disappears.",
+"Anfall banditlägret": "Attack the bandit camp",
+" i ditt lag har rutan. Du kan ställa trupper här som på en egen ruta, gå igenom den och anfalla grannarna härifrån. Dina trupper hjälper till att försvara den.": " on your team holds this territory. You can station troops here like on your own, march through it and attack its neighbours from here. Your troops help defend it.",
+"Dina trupper här": "Your troops here",
+"Flytta trupper hit": "Move troops here",
+"lagkamrater: ": "teammates: ",
+"Lägret rensas": "Camp cleared",
+" stannar på rutan": " stay on the territory",
+"Lägret rensat": "Camp cleared",
+"Banditlägret": "Bandit camp",
+"Lägret är borta. ": "The camp is gone. ",
+"Kvar i lägret: ": "Left in the camp: ",
+" banditer. ": " bandits. ",
+" stannar på rutan.": " stay on the territory.",
+"Ett banditläger med ": "A bandit camp with ",
+" har slagit läger i ": " has set up camp in ",
+". Bara du ser det. Anfall det från rutan om du vill ha guldet och exp.": ". Only you can see it. Attack it from the territory if you want the gold and exp.",
+"Lagkamratens ruta": "Teammate's territory",
+" vinstpoäng för laget": " victory points for the team",
+" Med <b>Två lag</b> väljer varje spelare lag, och värden placerar bottarna. Lagkamraterna börjar bredvid varandra, har färger ur samma familj, ser det de andra i laget ser och kan inte anfalla varandra. Du kan ställa trupper på en lagkamrats ruta (inte i byn) som på en egen, gå igenom lagkamraters rutor och anfalla allt som gränsar till dem. Lagets vinstpoäng räknas tillsammans, och målet är poängmålet gånger antalet spelare i det minsta laget.": " With <b>Two teams</b> each player picks a team and the host places the bots. Teammates start next to each other, get colours from the same family, see what the others on their team see and cannot attack each other. You can station troops on a teammate's territory (not in the village) like on your own, march through teammates' territories and attack anything bordering them. Team victory points count together, and the target is the victory point goal times the number of players in the smallest team.",
+" <b>Banditläger</b> kan dyka upp på dina rutor från minut 7. Bara du ser dem, och de gör ingen skada, men banditerna ger guld och exp som neutrala när du dödar dem.": " <b>Bandit camps</b> can appear on your territories from minute 7. Only you see them and they do no harm, but the bandits give gold and exp like neutrals when you kill them."
 };
 window.GP_EN_BODY = {
 "Inställningar": "Settings",
@@ -5397,6 +5700,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if (e.target && e.target.dataset && e.target.dataset.lock) { setLock0(e.target.dataset.lock, e.target.checked); ui.rowSig = ui.fwdSig = ''; if (ui.fwd) updateFwd(); else updateSheet(); }
     if (e.target && e.target.id === 'fwdStay' && ui.fwd) { ui.fwd.stay = e.target.checked; if (!ui.fwd.stay) setStayKeep(false); updateFwd(); }
     if (e.target && e.target.id === 'fwdKeep' && ui.fwd) { setStayKeep(e.target.checked); if (ui.stayKeep) ui.stay = true; updateFwd(); }
+    if (e.target && e.target.id === 'onTeams') setLobbyTeams(e.target.checked);
     if (e.target && (e.target.id === 'repAtk' || e.target.id === 'repDef')) { ui.repAtk = $('repAtk').checked; ui.repDef = $('repDef').checked; renderReports(); }
   });
   const me = () => S.players[ME];
@@ -5791,6 +6095,38 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       c.fillStyle = '#8c938f'; c.fillRect(cx - ww / 2, by - wh, ww, wh);
       c.fillStyle = '#6c7370'; for (let i = 0; i < 5; i++) c.fillRect(cx - ww / 2 + i * ww / 4.6, by - wh * 1.35, ww / 9, wh * 0.4);
     }
+  }
+  // Banditläger: ett litet tält med en eld bredvid, och antalet banditer.
+  function drawCamp(c, x, y, h, n, fs) {
+    const w = h * 0.95, k = 0.5 + 0.5 * Math.sin(performance.now() / 180);
+    c.fillStyle = 'rgba(0,0,0,.3)'; c.beginPath(); c.ellipse(x, y + h * 0.02, w * 0.62, h * 0.1, 0, 0, Math.PI * 2); c.fill();
+    c.lineJoin = 'round'; c.lineWidth = Math.max(1, h * 0.05); c.strokeStyle = '#2a1a0e';
+    c.beginPath(); c.moveTo(x - w / 2, y); c.lineTo(x, y - h * 0.72); c.lineTo(x + w / 2, y); c.closePath(); c.fillStyle = '#b98a52'; c.fill(); c.stroke();
+    c.beginPath(); c.moveTo(x, y - h * 0.72); c.lineTo(x + w / 2, y); c.lineTo(x + w * 0.08, y); c.closePath(); c.fillStyle = '#8c6236'; c.fill();
+    c.beginPath(); c.moveTo(x - w * 0.12, y); c.lineTo(x, y - h * 0.36); c.lineTo(x + w * 0.12, y); c.closePath(); c.fillStyle = '#2a1a0e'; c.fill();
+    // elden
+    const fx = x - w * 0.62, fy = y;
+    c.fillStyle = '#5a3f2a'; c.fillRect(fx - h * 0.14, fy - h * 0.05, h * 0.28, h * 0.06);
+    c.beginPath(); c.moveTo(fx - h * 0.1, fy - h * 0.04); c.quadraticCurveTo(fx - h * 0.1, fy - h * (0.28 + 0.06 * k), fx, fy - h * (0.36 + 0.08 * k)); c.quadraticCurveTo(fx + h * 0.1, fy - h * 0.24, fx + h * 0.1, fy - h * 0.04); c.closePath();
+    c.fillStyle = '#f08a2c'; c.fill();
+    c.beginPath(); c.moveTo(fx - h * 0.05, fy - h * 0.04); c.quadraticCurveTo(fx, fy - h * (0.2 + 0.05 * k), fx + h * 0.05, fy - h * 0.04); c.closePath(); c.fillStyle = '#ffd36a'; c.fill();
+    drawUnitStack(c, x + w * 0.5 + fs * 1.5 + 4, y - h * 0.3, E.U({ soldier: n }), '#b8743a', fs, true);
+  }
+  // Järnspikar: en planka med vassa järnspikar framför utposten (fler spikar per nivå). cx, by = mitten och plankans underkant.
+  function drawSpikes(c, cx, by, h, lvl) {
+    const n = 2 + Math.min(3, lvl), w = h * (0.5 + 0.17 * n), ph = Math.max(1.5, h * 0.09), sh = h * 0.3, sw = w / n;
+    c.lineJoin = 'miter';
+    c.fillStyle = 'rgba(0,0,0,.3)'; c.beginPath(); c.ellipse(cx, by + ph * 0.4, w * 0.56, ph * 0.9, 0, 0, Math.PI * 2); c.fill();
+    for (let i = 0; i < n; i++) {
+      const x = cx - w / 2 + sw * (i + 0.5), lean = (i - (n - 1) / 2) * sw * 0.18;
+      c.beginPath(); c.moveTo(x - sw * 0.3, by - ph); c.lineTo(x + lean, by - ph - sh); c.lineTo(x + sw * 0.3, by - ph); c.closePath();
+      c.fillStyle = '#c9d1d6'; c.fill();
+      c.lineWidth = Math.max(0.8, h * 0.035); c.strokeStyle = '#1b2024'; c.stroke();
+      c.beginPath(); c.moveTo(x + lean, by - ph - sh); c.lineTo(x + sw * 0.3, by - ph); c.lineTo(x + sw * 0.05, by - ph); c.closePath();
+      c.fillStyle = '#7d878e'; c.fill();
+    }
+    c.fillStyle = '#5a3f2a'; c.fillRect(cx - w / 2, by - ph, w, ph);
+    c.lineWidth = Math.max(0.8, h * 0.03); c.strokeStyle = '#1b2024'; c.strokeRect(cx - w / 2, by - ph, w, ph);
   }
   // Etikett (antal trupper eller "?") centrerad på cx, cy.
   // Trupperna på en ruta eller i en by: en rad per trupptyp med ikon och antal, lodrätt under varandra
@@ -7111,6 +7447,15 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
           c.fillText(String(t.post.lvl), cx - h * 0.55 + h * 0.32, cy - h * 0.15);
         }
       }
+      // Banditläger: ett tält med eld och banditerna, bara för den som äger rutan.
+      if (viewer && s >= 7 && E.campOf(st, i, viewer)) drawCamp(c, cx + clamp(s * 0.55, 6, 20), cy + clamp(s * 1.45, 12, 48), clamp(s * 1.3, 12, 42), st.tiles[i].camp.n, fs);
+      // Järnspikar: syns på alla rutor (och byn) som ägs av en spelare med färdigheten.
+      const wl = o && s >= 7 ? ((o.skills || {}).wire || 0) : 0;
+      if (wl) {
+        if (t.type === 'village') drawSpikes(c, cx - vz * 0.36, cy + vz * 0.52, clamp(vz * 0.36, 10, 46), wl);
+        else if (t.hill) drawSpikes(c, cx - clamp(s * 1.3, 10, 44), cy + clamp(s * 0.4, 4, 14) + clamp(s * 0.55, 6, 18), clamp(s * 1.1, 9, 34), wl);
+        else { const h = clamp(s * 1.25, 9, 40); drawSpikes(c, cx - h * 0.55, cy + h * 0.15 + h * 0.34, h, wl); }
+      }
       // Fribo: en sköld i ägarens färg och tiden som är kvar.
       if (t.type !== 'village' && E.safeAt(st, t) && s >= 7) {
         const who = st.players[t.owner || t.occ], z = clamp(s * 3.6, 20, 96), x = cx + s * 0.25, y = cy - s * 1.95;
@@ -7425,6 +7770,13 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       c.stroke();
       c.setLineDash([]);
       const r = Math.max(9, Math.min(16, s * 0.5));
+      // Stridsduglig: anfall från en spelare med färdigheten pulserar rött.
+      if (!move && o.skills && o.skills.vet) {
+        const k = 0.5 + 0.5 * Math.sin(performance.now() / 220);
+        c.beginPath(); c.arc(cx, cy, r + 3 + 5 * k, 0, Math.PI * 2);
+        c.fillStyle = 'rgba(230,40,30,' + (0.18 + 0.22 * (1 - k)).toFixed(2) + ')'; c.fill();
+        c.lineWidth = 2 + 1.5 * (1 - k); c.strokeStyle = 'rgba(255,70,55,' + (0.55 + 0.4 * (1 - k)).toFixed(2) + ')'; c.stroke();
+      }
       c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2);
       c.fillStyle = move ? PAL.slab3 : o.color; c.fill();
       c.lineWidth = 1.5; c.strokeStyle = move ? o.hi : '#fff1e4'; c.stroke();
@@ -8057,7 +8409,19 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     setText(h.el.querySelector('.val small'), c.vpToWin ? '/' + c.vpToWin : '');
     h.bar.style.background = S.online ? p.hi : '';
     const rvs = rivals();
-    if (S.week || rvs.length > 3) {
+    if (S.teams && c.vpToWin) {
+      // Lag: lagets vinstpoäng tillsammans, och motståndarlagets som en mätare under.
+      const mt = E.teamOf(S, ME), ot = mt === 0 ? 1 : 0, foe = teamIds(ot), tv = E.teamVp(S, ME), fv = foe.length ? E.teamVp(S, foe[0]) : 0;
+      const fc = foe.length ? S.players[foe[0]].hi : '';
+      setText(h.v, fmt(tv));
+      h.bar.style.width = Math.min(100, 100 * tv / c.vpToWin).toFixed(1) + '%';
+      if (h.rmeters.children.length !== 1) h.rmeters.innerHTML = '<div class="meter"><i></i></div>';
+      h.rmeters.firstChild.firstChild.style.width = Math.min(100, 100 * fv / c.vpToWin).toFixed(1) + '%';
+      h.rmeters.firstChild.firstChild.style.background = fc;
+      const sub = TR('mot ') + '<span style="color:' + fc + '">' + fmt(fv) + '</span>';
+      if (h.sub.innerHTML !== sub) h.sub.innerHTML = sub;
+      h.el.title = TR('Lagets vinstpoäng (alla i laget tillsammans): ') + fmt(tv) + TR(', varav dina ') + fmt(v) + '. ' + teamName(ot) + ': ' + fmt(fv) + TR('. Tryck för ställningen.');
+    } else if (S.week || rvs.length > 3) {
       // Veckospelet och onlinespel med många spelare: din plats (och i veckospelet avståndet till ledaren).
       const top = S.order.slice().sort((a, b) => S.players[b].vpMs - S.players[a].vpMs), lead = E.vp(S.players[top[0]]);
       if (S.week) h.bar.style.width = (lead > 0 ? 100 * v / lead : 0).toFixed(1) + '%';
@@ -8090,7 +8454,15 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   //   eller någon annans startby.
   // =====================================================================
   const mineT = t => E.isMine(t, ME);
-  const unitsAt = i => E.srcUnits(S, i);
+  // Lag: namn, om en spelare är lagkamrat, och vilka som är med i ett lag.
+  const teamName = t => TR('Lag ') + (t + 1);
+  const isAlly = id => !!S && !!S.teams && id !== ME && E.ally(S, id, ME);
+  const teamIds = t => S.order.filter(id => E.teamOf(S, id) === t);
+  const unitsAt = i => E.srcUnitsOf(S, i, ME);   // dina trupper på rutan (på en lagkamrats ruta: de du parkerat där)
+  // Rutor där dina trupper kan stå: dina egna och (i lagspel) lagkamraternas, utom deras byar.
+  const standT = t => E.standsOn(S, t, ME);
+  // Banditläger på den valda (egna) rutan: rutpanelen anfaller lägret i stället för att förstärka.
+  const campSel = () => ui.sel >= 0 && !!E.campOf(S, ui.sel, ME);
   const hasTroops = i => E.total(unitsAt(i)) > 0;
   const seeT = i => E.canSee(S, ME, i);
   function sheetMode(idx) {
@@ -8098,6 +8470,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if (t.type === 'village') return t.owner === ME ? 'home' : !t.owner || E.attackBlock(S, ME, idx) ? 'village' : 'target';
     if (t.owner === ME) return 'mine';
     if (t.occ === ME) return 'occ';
+    if (E.parkable(S, t, ME)) return 'ally';
     return E.attackBlock(S, ME, idx) ? 'far' : 'target';
   }
   // Varifrån trupper kan skickas till rutan: från byn och alla rutor där du har trupper,
@@ -8105,9 +8478,9 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   function sourcesFor(idx) {
     const t = S.tiles[idx];
     if (t.type === 'village' && !t.owner) return [];
-    if (!mineT(t) && E.attackBlock(S, ME, idx)) return [];
-    const ms = i => E.sendMs(S, ME, i, idx);
-    return S.tiles.map((x, i) => i).filter(i => i !== idx && mineT(S.tiles[i]) && E.route(S, ME, i, idx))
+    if (!standT(t) && E.attackBlock(S, ME, idx)) return [];
+    const ms = i => E.sendMs(S, ME, i, idx), camp = !!E.campOf(S, idx, ME);
+    return S.tiles.map((x, i) => i).filter(i => (i === idx ? camp && hasTroops(i) : (mineT(S.tiles[i]) || (E.parkable(S, S.tiles[i], ME) && hasTroops(i))) && E.route(S, ME, i, idx)))
       .sort((a, b) => E.total(unitsAt(b)) - E.total(unitsAt(a)) || ms(a) - ms(b));   // flest trupper först, vid lika den snabbaste
   }
   // Förval: rutan med flest trupper (listan är redan sorterad så).
@@ -8123,8 +8496,9 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     const t = S.tiles[idx], p = me();
     const owner = t.owner || t.occ;
     const op = owner && owner !== ME ? S.players[owner] : null;
-    const info = mineT(t) ? null : E.visibleTroops(S, ME, idx);
-    const def = E.tileDefense(S, idx, false, p);   // andras verkstad syns inte; Stridsduglig räknas med
+    const cp = E.campOf(S, idx, ME);
+    const info = cp ? { known: true, u: E.U({ soldier: cp.n }), total: cp.n, t: S.time } : standT(t) ? null : E.visibleTroops(S, ME, idx);
+    const def = cp ? { mul: 1, flat: 0, sup: 1 } : E.tileDefense(S, idx, true, p);   // alla bonusar som i den riktiga striden: försvararens verkstad, färdigheter, mur, kullen; Stridsduglig räknas med
     const aM = E.attackVec(S, p, true), avail = lockedU(availIn || fromU());
     let need = null, safe = null;
     if (info) {
@@ -8133,10 +8507,10 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       const fill = dU => E.fillAttack(S, avail, dU, aM, def.mul, E.ATK, def.flat, def.sup) || E.fillAttack(S, plus, dU, aM, def.mul, E.ATK, def.flat, def.sup);
       need = fill(info.u);
       const more = E.U(info.u);
-      more.soldier += op ? Math.ceil(info.total * 0.3) + 1 : 0;   // neutrala får inga nya medan anfallet är på väg
+      more.soldier += op && !cp ? Math.ceil(info.total * 0.3) + 1 : 0;   // neutrala (och banditlägret) får inga nya medan anfallet är på väg
       safe = fill(more);
     }
-    return { info, aM, dM: def.mul, dFlat: def.flat, dSup: def.sup, op, need, safe };
+    return { info, aM, dM: def.mul, dFlat: def.flat, dSup: def.sup, op: cp ? null : op, need, safe, camp: !!cp };
   }
   function selectTile(idx) {
     if (ui.fwd) { if (idx >= 0) pickFwd(idx); return; }
@@ -8184,13 +8558,15 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   function sheetHead(t) {
     const o = t.owner ? S.players[t.owner] : null, oc = !o && t.occ ? S.players[t.occ] : null;
     const tag = t.owner === ME ? '<span class="tag mine" style="background:' + me().color + '">' + TR('Din') + '</span>'
-      : o ? '<span class="tag rival" style="background:' + o.color + '">' + esc(t.type === 'village' && !S.online ? TR('Rival') : pname(o)) + '</span>'
+      : o ? '<span class="tag rival" style="background:' + o.color + '">' + esc(t.type === 'village' && !S.online ? TR('Rival') : pname(o)) + (isAlly(o.id) ? TR(' · lagkamrat') : '') + '</span>'
       : t.type === 'village' ? '<span class="tag neutral">' + TR('Ledig') + '</span>'
       : t.occ === ME ? '<span class="tag occ" style="border-color:' + me().hi + '">' + TR('Ockuperad') + '</span>'
       : oc ? '<span class="tag occ" style="border-color:' + oc.hi + '">' + esc(pname(oc)) + '</span>'
       : '<span class="tag neutral">' + TR('Neutral') + '</span>';
     const imm = (o && E.immune(S, o.id)) ? o : null;
-    const prot = (imm ? '<span class="tag shield">' + icon('k-defense') + TR('Immun ') + durWords(imm.immuneUntil - S.time) + '</span>' : '') +
+    const wo = t.owner ? S.players[t.owner] : null, wl = wo ? ((wo.skills || {}).wire || 0) : 0;
+    const prot = (wl ? '<span class="tag shield" title="' + TR('Järnspikar: +') + wl * S.cfg.skills.wire.flat + TR(' i grundförsvar på alla ägarens rutor.') + '">' + icon('s-wire') + TR('Järnspikar ') + '+' + wl * S.cfg.skills.wire.flat + '</span>' : '') +
+      (imm ? '<span class="tag shield">' + icon('k-defense') + TR('Immun ') + durWords(imm.immuneUntil - S.time) + '</span>' : '') +
       (E.safeAt(S, t) && t.type !== 'village' ? '<span class="tag shield" title="' + TR('Fribo: andra spelare kan inte anfalla rutan än.') + '">' + icon('s-bridge') + '<span id="sh-safe">' + dur(t.safeUntil - S.time) + '</span></span>' : '');
     const sub = t.type === 'village' ? TR('Startby') : t.adj.length + (t.adj.length === 1 ? TR(' granne') : TR(' grannar'));
     // Bilden uppe till vänster: ägarens (eller ockupantens) avatar, en bandit på neutrala rutor.
@@ -8245,20 +8621,20 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   function prefillSend() {
     ui.sendU = E.U();
     const t = S.tiles[ui.sel];
-    if (mineT(t) || (t.type === 'village' && !t.owner)) return;
+    if ((standT(t) && !campSel()) || (t.type === 'village' && !t.owner)) return;
     const n = needs(ui.sel), have = fromU();
     const fits = u => u && KEYS.every(k => (u[k] || 0) <= (have[k] || 0));
     ui.sendU = E.U(fits(n.safe) ? n.safe : fits(n.need) ? n.need : E.U());
   }
   // Vid anfall går det att skriva in fler trupper än du har: då simuleras striden men anfallet kan inte skickas.
-  const attackMode = () => ui.sel >= 0 && sheetMode(ui.sel) === 'target';
+  const attackMode = () => ui.sel >= 0 && (sheetMode(ui.sel) === 'target' || campSel());
   const overHave = () => { const su = fromU(); return KEYS.some(k => (ui.sendU[k] || 0) > (su[k] || 0)); };
   function renderSheet() {
     const el = $('sheet');
     if (!S || ui.sel < 0) { if (!el.hidden) { el.hidden = true; placeSheet(); clampCam(); } ui.sheetSig = ''; return; }
     if (ui.fwd) { renderFwd(el); return; }
     const t = S.tiles[ui.sel], mode = sheetMode(ui.sel), c = S.cfg;
-    const sig = ui.sel + '|' + mode + '|' + t.owner + '|' + t.occ + '|' + !!t.post + '|' + (sourcesFor(ui.sel).length > 0) + '|' + (t.mineLvl || 0) + '|' + E.safeAt(S, t) + '|' + E.leechAt(S, me(), ui.sel);
+    const sig = ui.sel + '|' + mode + '|' + t.owner + '|' + t.occ + '|' + !!t.post + '|' + (sourcesFor(ui.sel).length > 0) + '|' + (t.mineLvl || 0) + '|' + E.safeAt(S, t) + '|' + E.leechAt(S, me(), ui.sel) + '|' + campSel();
     if (sig !== ui.sheetSig) {
       ui.sheetSig = sig;
       ui.rowSig = '';
@@ -8287,7 +8663,19 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
           // Guldgruvan på rutan: uppgraderas med ekonomicentret i byn.
           '<div class="post-row mine-up"><div class="up-wrap"><button class="btn" type="button" data-act="mine-up" id="mineUpBtn">' + icon('b-goldmine', 'ic') + '<span id="mineUpTxt"></span><span class="cost" id="mineUpCostBox">' + goldIcon + '<span id="mineUpCost"></span></span></button>' +
             '<span class="up-eff" id="mineUpEff"></span><span class="up-when" id="mineUpWhen"></span>' + roiChip('rm') + '</div>' + roiMore('rm') + '</div>' : '');
-        if (sourcesFor(ui.sel).length) html += sendHTML(TR('Förstärk'), false);
+        if (campSel()) {
+          // Banditläger: bara du ser det. Det gör ingen skada, men banditerna ger guld och exp.
+          const cp = E.campOf(S, ui.sel, ME);
+          html += '<div class="mine-note camp-note">' + '<span class="camp-ic">' + avatarSVG('bandit') + '</span><p><b>' + TR('Banditläger') + ': <span id="sh-camp">' + cp.n + '</span> ' + TR('banditer') + '.</b> ' +
+            TR('Bara du ser lägret. Du måste inte anfalla det, men varje bandit du dödar ger ') + c.killReward + TR(' guld och ') + c.expPerNeutralKill + TR(' exp. Trupperna som står på rutan kan anfalla direkt, och de som överlever stannar här. Tar någon annan rutan försvinner lägret.') + '</p></div>';
+          if (sourcesFor(ui.sel).length) html += sendHTML(TR('Anfall banditlägret'), true);
+        } else if (sourcesFor(ui.sel).length) html += sendHTML(TR('Förstärk'), false);
+      } else if (mode === 'ally') {
+        // Lagkamratens ruta: ställ trupper här som på en egen ruta, och anfall vidare härifrån.
+        const o = S.players[t.owner || t.occ];
+        html += '<p class="lede">' + esc(pname(o)) + TR(' i ditt lag har rutan. Du kan ställa trupper här som på en egen ruta, gå igenom den och anfalla grannarna härifrån. Dina trupper hjälper till att försvara den.') + '</p>' +
+          '<dl class="facts"><div><dt>' + TR('Dina trupper här') + '</dt><dd id="sh-def"></dd></div><div><dt>' + TR('Försvarspoäng') + '</dt><dd id="sh-dp"></dd></div></dl>' + recall;
+        if (sourcesFor(ui.sel).length) html += sendHTML(TR('Flytta trupper hit'), false);
       } else if (mode === 'occ') {
         html += '<p class="lede">' + TR('Du tog rutan senast, men den är inte din förrän du bygger en utpost. Utposten ger ') + goldRate(c.outpost.goldPerLevel) +
           TR(', +') + c.outpost.defPerLevel + TR(' i försvar och ') + (S.week ? TR('1 vinstpoäng per ') + durWords(vpEvery(t) * MIN) + '.' : t.hill ? TR('1 vinstpoäng i minuten (kullen).') : TR('1 vinstpoäng per ') + c.vpPerRegionMinutes + TR(' minuter.')) + '</p>' +
@@ -8375,7 +8763,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     updateFwd();
   }
   // Vid anfall går det att simulera med fler trupper än du har (som i rutpanelen); annars högst det som finns.
-  const fwdAtk = () => !!ui.fwd && ui.fwd.to >= 0 && !mineT(S.tiles[ui.fwd.to]);
+  const fwdAtk = () => !!ui.fwd && ui.fwd.to >= 0 && !standT(S.tiles[ui.fwd.to]);
   function fwdSet(k, v) { if (ui.fwd) ui.fwd.u[k] = ui.lock0[k] ? 0 : clamp(v, 0, fwdAtk() ? 9999 : unitsAt(ui.fwd.from)[k] || 0); }
   function pickFwd(idx) {
     const f = ui.fwd;
@@ -8437,13 +8825,13 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   function fwdTargets(from) {
     const out = [];
     // Egna rutor och rutor som går att anfalla (anfall), så länge det finns en väg dit genom dina rutor.
-    S.tiles.forEach((t, i) => { if (i !== from && !t.off && (t.owner === ME || !E.attackBlock(S, ME, i)) && E.route(S, ME, from, i)) out.push(i); });
+    S.tiles.forEach((t, i) => { if (i !== from && !t.off && (t.owner === ME || standT(t) || !E.attackBlock(S, ME, i)) && E.route(S, ME, from, i)) out.push(i); });
     return out.sort((a, b) => E.sendMs(S, ME, from, a) - E.sendMs(S, ME, from, b));
   }
   // Starta en förflyttning med alla trupper valda och närmaste egna ruta som mål.
   function startFwd(idx) {
     const t = S.tiles[idx];
-    if (!t || !mineT(t) || !hasTroops(idx)) return;
+    if (!t || !standT(t) || !hasTroops(idx)) return;
     const ds = fwdTargets(idx);
     ui.fwd = { from: idx, u: lockedU(unitsAt(idx)), to: ds.length ? ds[0] : -1, stay: ui.stayKeep };
     ui.sheetSig = ''; ui.fwdSig = '';
@@ -8476,7 +8864,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     const sel = $('fromSel'), sig = opts.map(i => i + ':' + E.total(unitsAt(i))).join(',');
     if (sel.dataset.sig !== sig) {
       sel.dataset.sig = sig;
-      sel.innerHTML = opts.map(i => '<option value="' + i + '">' + esc(rname(S.tiles[i])) + ' · ' + trupper(E.total(unitsAt(i))) + ' · ' + dur(E.sendMs(S, ME, i, ui.sel)) + '</option>').join('');
+      sel.innerHTML = opts.map(i => '<option value="' + i + '">' + esc(rname(S.tiles[i])) + (i === ui.sel ? TR(' (här)') : '') + ' · ' + trupper(E.total(unitsAt(i))) + ' · ' + dur(E.sendMs(S, ME, i, ui.sel)) + '</option>').join('');
     }
     if (document.activeElement !== sel) sel.value = String(ui.sendFrom);
   }
@@ -8515,7 +8903,10 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if ($('sh-def')) {
       const info = E.visibleTroops(S, ME, ui.sel);
       let def;
-      if (mineT(t)) def = '<b>' + unitList(t.u, TR('tom')) + '</b>' + (t.owner === ME && E.wireBonus(S, p) ? ' <span class="muted">' + TR('+ järnspikar') + '</span>' : '');
+      const allyU = E.U(); if (t.al) for (const id in t.al) if (id !== ME) E.addTo(allyU, t.al[id]);
+      const allyTxt = E.total(allyU) ? ' <span class="muted">· ' + TR('lagkamrater: ') + unitList(allyU) + '</span>' : '';
+      if (E.parkable(S, t, ME)) def = '<b>' + unitList(unitsAt(ui.sel), TR('inga')) + '</b>';
+      else if (mineT(t)) def = '<b>' + unitList(t.u, TR('tom')) + '</b>' + (t.owner === ME && E.wireBonus(S, p) ? ' <span class="muted">' + TR('+ järnspikar') + '</span>' : '') + allyTxt;
       else if (info) def = !t.owner && !t.occ ? '<b>' + info.total + '</b> ' + TR('neutrala') : '<b>' + unitList(info.u, '0') + '</b>';
       else def = '<b>?</b> <span class="muted">' + TR('syns bara från en granne') + '</span>';
       $('sh-def').innerHTML = def;
@@ -8523,11 +8914,13 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if ($('sh-safe')) setText($('sh-safe'), dur(t.safeUntil - S.time));
     if ($('sh-hill')) { const h = hillTxt(t); if ($('sh-hill').innerHTML !== h) $('sh-hill').innerHTML = h; }
     if ($('sh-dp')) { const d = E.tileDefense(S, ui.sel, true); $('sh-dp').innerHTML = '<b>' + nf1.format(E.defensePoints(S, ui.sel, true)) + '</b>' + (d.flat ? ' <span class="muted">(' + TR('varav ') + d.flat + TR(' grundförsvar') + ')</span>' : ''); }
-    if ($('stayRow')) $('stayRow').hidden = t.type === 'village';
+    if ($('stayRow')) $('stayRow').hidden = t.type === 'village' || campSel();
+    if ($('sh-camp') && campSel()) setText($('sh-camp'), String(E.campOf(S, ui.sel, ME).n));
+    if (mode === 'ally') $('fwdBtn').disabled = $('recallAll').disabled = !hasTroops(ui.sel);
     if ($('sh-post')) $('sh-post').innerHTML = postTxt(t);
     const gph = E.goldPerHour(S, tw);
     const when = cost => tw.gold >= cost ? '' : cost > E.goldCap(S, tw) ? TR('Kräver större skattkammare') : TR('Råd om ') + dur((cost - tw.gold) / gph * E.HOUR);
-    if (mode === 'mine' && !t.post) $('fwdBtn').disabled = $('recallAll').disabled = t.troops === 0;
+    if (mode === 'mine' && !t.post) $('fwdBtn').disabled = $('recallAll').disabled = !hasTroops(ui.sel);
     if (mode === 'mine' && t.post) {
       const L = t.post.lvl, W = t.post.wall, maxL = L >= E.postMax(S, p), maxW = W >= c.wall.max;
       const cu = E.postUpCost(S, p, t), cw = E.postWallCost(S, p, t);
@@ -8549,7 +8942,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       setText($('postTowerEff'), maxT ? TR('Ser och anfaller 2 rutor bort') : TL ? TR('Anfall 2 rutor bort härifrån') : TR('Ser fiender 2 rutor bort härifrån'));
       setText($('postTowerWhen'), maxT ? '' : when(ct));
       setRoi('post', maxL ? Infinity : E.roiMs(S, p, cu, E.postLevelGph(S, p)));
-      $('fwdBtn').disabled = $('recallAll').disabled = t.troops === 0;
+      $('fwdBtn').disabled = $('recallAll').disabled = !hasTroops(ui.sel);
     }
     if ($('mineUpBtn')) {
       const ML = t.mineLvl || 0, ec = tw.buildings.econ || 0, maxM = E.atMax(c.buildings.econ, ML), rm = c.regionMine;
@@ -8562,12 +8955,12 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     }
     if (mode === 'occ') {
       $('buildBtn').disabled = tw.gold < c.outpost.cost;
-      $('fwdBtn').disabled = $('recallAll').disabled = t.troops === 0;
+      $('fwdBtn').disabled = $('recallAll').disabled = !hasTroops(ui.sel);
     }
     if (!$('urows')) return;
     updateFromSel();
     const su = fromU();
-    if (mode !== 'target') KEYS.forEach(k => { ui.sendU[k] = clamp(ui.sendU[k] || 0, 0, su[k] || 0); });
+    if (mode !== 'target' && !campSel()) KEYS.forEach(k => { ui.sendU[k] = clamp(ui.sendU[k] || 0, 0, su[k] || 0); });
     renderUnitRows();
     KEYS.forEach(k => {
       const inp = $('sendu-' + k);
@@ -8576,7 +8969,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       setText($('have-' + k), TR(' av ') + (su[k] || 0));
       inp.classList.toggle('over', (ui.sendU[k] || 0) > (su[k] || 0));
     });
-    const attack = mode === 'target';
+    const attack = mode === 'target' || campSel();
     const n = attack ? needs(ui.sel) : null;
     const sel = E.total(ui.sendU), have = E.total(su);
     const hsig = ui.sendFrom + ':' + KEYS.map(k => su[k] || 0).join(',');
@@ -8614,8 +9007,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   function forecast(t, sel, n, from, to, stay, sim) {
     const A = E.total(sel);
     if (A < 1 || from < 0) return TR('Välj vilka trupper som ska gå.');
-    const ms = E.sendMs(S, ME, from, to, sel), when = TR('Framme om ') + dur(ms) + ' (' + steg(routeSteps(from, to)) + ')' + (t.type === 'village' && sel.siege > 0 && !mineT(t) ? TR(', halv fart med siegemen') : '');
-    if (mineT(t)) return unitList(sel) + TR(' flyttar hit från ') + esc(rname(S.tiles[from])) + '. ' + when + '.';
+    const ms = E.sendMs(S, ME, from, to, sel), when = TR('Framme om ') + dur(ms) + (from === to ? '' : ' (' + steg(routeSteps(from, to)) + ')') + (t.type === 'village' && sel.siege > 0 && !mineT(t) ? TR(', halv fart med siegemen') : '');
+    if (standT(t) && !(n && n.camp)) return unitList(sel) + TR(' flyttar hit från ') + esc(rname(S.tiles[from])) + '. ' + when + '.';
     if (!n.info) return TR('Du ser inte hur många som står här.') + ' ' + when + '.';
     const dU = n.info.u, D = n.info.total;
     const fight = D > 0 || n.dFlat > 0;
@@ -8623,7 +9016,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     const surv = A - r.aLoss, win = surv > 0 && r.dLoss >= D, village = t.type === 'village';
     // Poängen före att den starkare sidan fått skillnaden dubblad (förlusterna räknas med dubbleringen).
     const raw = fight ? rawPow(r.aPow, r.dPow, n.dSup) : { a: attackOnly(sel, n.aM), d: 0 };
-    const verdict = !win ? TR('Räcker inte') : village ? TR('Plundras') : t.owner ? TR('Erövras') : TR('Ockuperas');
+    const verdict = !win ? TR('Räcker inte') : n.camp ? TR('Lägret rensas') : village ? TR('Plundras') : t.owner ? TR('Erövras') : TR('Ockuperas');
     const cell = (cls, label, val) => '<div class="' + cls + '"><span>' + label + '</span><b>' + val + '</b></div>';
     let html = (sim ? '<p class="sim">' + TR('Simulering: du har bara ') + unitList(unitsAt(from), '0') + TR(' här.') + '</p>' : '') +
       '<div class="fc-grid">' +
@@ -8633,6 +9026,12 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         cell('res ' + (win ? 'ok' : 'no'), TR('Rutan'), verdict) +
       '</div>';
     const foot = [when];
+    if (n.camp) {
+      // Banditlägret: guld och exp för varje dödad bandit, och de överlevande stannar på rutan.
+      if (r.dLoss) foot.push('+' + r.dLoss * S.cfg.killReward + TR(' guld') + ' · +' + r.dLoss * S.cfg.expPerNeutralKill + ' exp');
+      if (surv > 0) foot.push(trupper(surv) + TR(' stannar på rutan'));
+      return html + '<p class="fc-foot">' + foot.join(' · ') + '.</p>';
+    }
     if (win) {
       if (village) foot.push(TR('Bär hem upp till ') + E.carryCapacity(S, E.subFrom(E.U(sel), r.aLossU)) + TR(' guld'));
       const sv = (sel.siege || 0) - (r.aLossU.siege || 0);
@@ -8652,17 +9051,28 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   // =====================================================================
   function standingsHTML() {
     const c = S.cfg;
-    const ids = S.order.slice().sort((a, b) => E.vp(S.players[b]) - E.vp(S.players[a]));
-    return '<div class="standings">' + ids.map(id => {
+    const ids = S.order.slice().sort((a, b) => (S.teams ? (E.teamOf(S, a) === E.teamOf(S, ME) ? 0 : 1) - (E.teamOf(S, b) === E.teamOf(S, ME) ? 0 : 1) : 0) || E.vp(S.players[b]) - E.vp(S.players[a]));
+    // Lag: först lagen (poängen tillsammans), sedan spelarna, ditt lag först.
+    const teams = !S.teams ? '' : [E.teamOf(S, ME), E.teamOf(S, ME) === 0 ? 1 : 0].map(t => {
+      const m = teamIds(t); if (!m.length) return '';
+      const v = E.teamVp(S, m[0]), rate = m.reduce((x, id) => x + E.vpPerMinute(S, S.players[id]), 0), ours = t === E.teamOf(S, ME);
+      const eta = rate > 0 && v < c.vpToWin ? TR('Når ') + c.vpToWin + TR(' om ~') + Math.ceil((c.vpToWin - v) / rate) + TR(' min i den här takten') : '';
+      return '<div class="stand team ' + (ours ? 'me' : 'rival') + '"><span class="dot" style="background:' + S.players[m[0]].color + '"></span>' +
+        '<div class="who">' + esc(teamName(t)) + (ours ? TR(' (ditt lag)') : '') + '<small>' + esc(listNames(m.map(id => id === ME ? TR('du') : pname(S.players[id])))) + ' · +' + vpRate(rate) + TR('/min') + '</small>' + (eta ? '<small class="eta">' + eta + '</small>' : '') + '</div>' +
+        '<span class="pts">' + fmt(v) + '<small>/' + c.vpToWin + '</small></span>' +
+        '<div class="meter"><i style="width:' + Math.min(100, 100 * v / c.vpToWin).toFixed(1) + '%;background:' + S.players[m[0]].hi + '"></i></div></div>';
+    }).join('');
+    return teams + '<div class="standings">' + ids.map(id => {
       const p = S.players[id], v = E.vp(p), mine = id === ME, rate = E.vpPerMinute(S, p);
       const towns = p.towns.length;
-      const eta = rate > 0 && v < c.vpToWin ? TR('Når ') + c.vpToWin + TR(' om ~') + Math.ceil((c.vpToWin - v) / rate) + TR(' min i den här takten') : '';
+      const eta = !S.teams && rate > 0 && v < c.vpToWin ? TR('Når ') + c.vpToWin + TR(' om ~') + Math.ceil((c.vpToWin - v) / rate) + TR(' min i den här takten') : '';
       return '<div class="stand ' + (mine ? 'me' : 'rival') + '"><span class="dot" style="background:' + p.color + '"></span>' +
         '<div class="who">' + esc(S.online ? (mine ? TR('Du') : p.name) + ' · ' + p.villageName + (p.bot ? ' · ' + (RIVAL_LEVELS[p.bot] || '').toLowerCase() : '') : mine ? TR('Du · ') + p.villageName : p.villageName + ' · ' + (RIVAL_LEVELS[p.bot] || 'rival').toLowerCase()) +
           (S.online && !mine && NET.on[id] === false ? TR('<small class="off">Frånkopplad</small>') : '') +
+          (S.teams ? '<small>' + esc(teamName(E.teamOf(S, id))) + (isAlly(id) ? TR(' · lagkamrat') : '') + '</small>' : '') +
           '<small>' + steg(E.countControlled(S, id)) + ' · +' + vpRate(rate) + TR('/min') + '</small>' +
           (eta ? '<small class="eta">' + eta + '</small>' : '') + '</div>' +
-        '<span class="pts">' + fmt(v) + '<small>/' + c.vpToWin + '</small></span>' +
+        '<span class="pts">' + fmt(v) + (S.teams ? '' : '<small>/' + c.vpToWin + '</small>') + '</span>' +
         '<div class="meter"><i style="width:' + (100 * v / c.vpToWin).toFixed(1) + '%;background:' + p.hi + '"></i></div></div>';
     }).join('') + '</div>';
   }
@@ -8691,7 +9101,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   function renderStand() {
     setText($('standTitle'), S.week ? TR('Topplista') : TR('Ställning'));
     setText($('standHint'), S.week ? TR('Flest vinstpoäng när veckan är slut vinner. Dödade räknar bara andra spelares trupper, inte neutrala.') :
-      TR('Först till ') + S.cfg.vpToWin + TR(' vinstpoäng vinner. Varje ruta ger 1 vinstpoäng per ') + S.cfg.vpPerRegionMinutes + TR(' minuter till den som kontrollerar den, kullen 1 i minuten.'));
+      (S.teams ? TR('Lagen räknar vinstpoängen tillsammans, och det första laget till ') + S.cfg.vpToWin + TR(' vinner. Lagkamrater kan inte anfalla varandra och ser det de andra i laget ser. ') : TR('Först till ') + S.cfg.vpToWin + TR(' vinstpoäng vinner. ')) + TR('Varje ruta ger 1 vinstpoäng per ') + S.cfg.vpPerRegionMinutes + TR(' minuter till den som kontrollerar den, kullen 1 i minuten.'));
     if (S.week) { renderBoard(); return; }
     const html = S.order.length > 1 ? standingsHTML() : TR('<p class="lede">Du spelar utan rivaler. ') + fmt(E.vp(me())) + TR(' av ') + S.cfg.vpToWin + TR(' vinstpoäng.</p>');
     if (html !== ui.standSig) { ui.standSig = html; $('standBody').innerHTML = html; }
@@ -8726,19 +9136,19 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   $('ov-stand').addEventListener('click', e => { if (e.target === e.currentTarget) $('ov-stand').hidden = true; });
   function garrisonCount() {
     let n = 0;
-    S.tiles.forEach(t => { if (t.type !== 'village' && mineT(t)) n += t.troops; });
+    S.tiles.forEach((t, i) => { if (t.type !== 'village' && standT(t)) n += E.total(unitsAt(i)); });
     return n;
   }
   function renderTroops() {
     const p = me(), towns = [TW()];
     const armies = S.armies.filter(a => a.owner === ME);
     const incoming = S.armies.filter(a => a.owner !== ME && a.kind === 'attack' && S.tiles[a.to].owner === ME);
-    const owned = S.tiles.map((t, i) => [t, i]).filter(([t]) => t.type !== 'village' && mineT(t));
+    const owned = S.tiles.map((t, i) => [t, i]).filter(([t, i]) => t.type !== 'village' && (mineT(t) || (E.parkable(S, t, ME) && hasTroops(i))));
     const garr = garrisonCount();
     const homeU = E.U(); let queued = 0;
     towns.forEach(tw => { E.addTo(homeU, tw.hu); queued += tw.queue + (tw.cq || 0); });
     const sig = armies.map(a => a.id + ':' + a.count + ':' + a.to).join(',') + '|' + incoming.map(a => a.id).join(',') +
-      '|' + owned.map(([t, i]) => i + ':' + t.owner + ':' + KEYS.map(k => t.u[k]).join('.') + ':' + (t.post ? t.post.lvl + '.' + t.post.wall : '')).join(',') +
+      '|' + owned.map(([t, i]) => i + ':' + t.owner + ':' + KEYS.map(k => unitsAt(i)[k]).join('.') + ':' + (t.post ? t.post.lvl + '.' + t.post.wall : '')).join(',') +
       '|' + towns.map(tw => tw.idx + ':' + KEYS.map(k => tw.hu[k]).join('.') + ':' + tw.queue).join(',') + '|' + ui.confirmRecall + '|' + (p.skills.eco || 0);
     if (sig !== ui.troopsSig) {
       ui.troopsSig = sig;
@@ -8782,12 +9192,12 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       html += '</div><div class="stack"><h3 class="eyebrow">' + TR('Dina rutor') + '</h3>';
       if (!owned.length) html += '<p class="empty">' + TR('Du har inga rutor än. Anfall en neutral granne till byn och bygg en utpost där.') + '</p>';
       else {
-        owned.sort((a, b) => (b[0].owner === ME) - (a[0].owner === ME) || b[0].troops - a[0].troops);
+        owned.sort((a, b) => (b[0].owner === ME) - (a[0].owner === ME) || E.total(unitsAt(b[1])) - E.total(unitsAt(a[1])));
         html += '<div class="list">' + owned.map(([t, i]) =>
           '<div class="item">' + icon(t.owner === ME ? 'b-wall' : 't-map') +
             '<div class="t"><button class="linkish" type="button" data-act="goto" data-tile="' + i + '">' + esc(rname(t)) + '</button><small>' +
-              (t.owner === ME ? (t.post ? TR('Utpost nivå ') + t.post.lvl + (t.post.wall ? TR(' · mur ') + t.post.wall : '') : t.hill ? TR('Kullen') : '') : TR('Ockuperad · bygg en utpost')) + ' · ' + (t.troops ? unitList(t.u) : TR('tom')) + '</small></div>' +
-            (t.troops > 0 ? '<span class="obj-acts"><button class="btn" type="button" data-act="fwd-from" data-tile="' + i + '">' + TR('Flytta') + '</button><button class="btn" type="button" data-act="recall" data-n="all" data-tile="' + i + '">' + TR('Kalla hem') + '</button></span>' : '<span></span>') +
+              (t.owner === ME ? (t.post ? TR('Utpost nivå ') + t.post.lvl + (t.post.wall ? TR(' · mur ') + t.post.wall : '') : t.hill ? TR('Kullen') : '') : t.occ === ME ? TR('Ockuperad · bygg en utpost') : TR('Lagkamratens ruta')) + ' · ' + (hasTroops(i) ? unitList(unitsAt(i)) : TR('tom')) + '</small></div>' +
+            (hasTroops(i) ? '<span class="obj-acts"><button class="btn" type="button" data-act="fwd-from" data-tile="' + i + '">' + TR('Flytta') + '</button><button class="btn" type="button" data-act="recall" data-n="all" data-tile="' + i + '">' + TR('Kalla hem') + '</button></span>' : '<span></span>') +
           '</div>').join('') + '</div>';
       }
       html += '</div>';
@@ -8819,9 +9229,9 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     bridge: { name: TR('Fribo'), icon: 's-bridge', desc: (c, r) => TR('En ruta du tar kan inte anfallas av andra spelare under ') + lvTxt(r, c.max, x => secTxt(c.sec * x * 1000 * (S.cfg.pace || 1))) + TR('. Anfall som redan är på väg dit vänder utan strid. Rutan får en sköld på kartan så länge skyddet varar.') },
     blitz: { name: TR('Snabbfotad'), icon: 's-blitz', desc: (c, r) => TR('Anfall går ') + lvTxt(r, c.max, x => pctS(c.per * x)) + TR(' snabbare.') },
     auto:  { name: TR('Klappat och klart'), icon: 's-auto', desc: c => TR('En ruta du tar blir din direkt, med en utpost i nivå ') + c.lvl + TR('. Du behöver inte bygga utposten själv. Kullen får aldrig någon utpost.') },
-    vet:   { name: TR('Stridsduglig'), icon: 's-vet', desc: c => TR('Dina anfall ignorerar grundförsvaret från utposter och ') + pctS(c.wall) + TR(' av försvarsbonusen från murar (i utposter och byar).') },
+    vet:   { name: TR('Stridsduglig'), icon: 's-vet', desc: c => TR('Dina anfall ignorerar grundförsvaret från utposter och ') + pctS(c.wall) + TR(' av försvarsbonusen från murar (i utposter och byar).') + TR(' Dina anfall pulserar rött på kartan, så alla ser dem.') },
     def:   { name: TR('Hårdhudad'), icon: 's-def', desc: (c, r) => TR('Försvarspoäng ') + lvTxt(r, c.max, x => '+' + pctS(c.per * x)) + '.' },
-    wire:  { name: TR('Järnspikar'), icon: 's-wire', desc: (c, r) => TR('Alla dina rutor, byn inräknad, får ') + lvTxt(r, c.max, x => '+' + c.flat * x) + TR(' i grundförsvar, även när ingen står där.') },
+    wire:  { name: TR('Järnspikar'), icon: 's-wire', desc: (c, r) => TR('Alla dina rutor, byn inräknad, får ') + lvTxt(r, c.max, x => '+' + c.flat * x) + TR(' i grundförsvar, även när ingen står där.') + TR(' Spikarna syns vid dina utposter och din by.') },
     move:  { name: TR('En för alla, alla för en'), icon: 's-move', desc: (c, r) => TR('Förflyttningar av trupper mellan dina rutor och hem till byn går ') + lvTxt(r, c.max, x => pctS(c.per * x)) + TR(' snabbare.') },
     again: { name: TR('En gång till!'), icon: 's-again', desc: (c, r) => TR('För varje draug som dör när du försvarar dig får du tillbaka ') + lvTxt(r, c.max, x => nf1.format(c.per * x) + TR(' lik')) + TR(' i kryptan.') },
     dead:  { name: TR('Mur av döda'), icon: 's-dead', desc: c => TR('Dina draugar får +') + nf1.format(c.def) + TR(' i försvar (') + nf1.format(S.cfg.units.draug.def) + ' → ' + nf1.format(S.cfg.units.draug.def + c.def) + ').' },
@@ -8932,6 +9342,20 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         '<div class="rep-grid">' + sideHTML(TR('Ditt anfall'), myU, raw.a, base(myU), myL, false, myP - raw.a) + sideHTML(esc(who(other)) + TR('s anfall'), thU, raw.d, base(thU), thL, false, thP - raw.d) + '</div>' +
         '<p>' + foot + '</p></article>';
     }
+    if (e.kind === 'battle' && e.camp) {
+      // Banditlägret på en egen ruta.
+      if (e.player !== ME) return '';
+      const aU = e.aU, dU = e.dU, uc = S.cfg.units, raw = rawPow(e.aPow, e.dPow, 1);
+      const aBase = KEYS.reduce((x, k) => x + (aU[k] || 0) * uc[k].atk, 0), dBase = KEYS.reduce((x, k) => x + (dU[k] || 0) * uc[k].def, 0);
+      let foot = '';
+      if (e.loot > 0) foot += '<b>+' + fmt(e.lootKept) + TR(' guld</b>') + (e.lootKept < e.loot ? ' (' + fmt(e.loot - e.lootKept) + TR(' fick inte plats)') : '') + '. ';
+      if (e.expA) foot += '<b class="xp">+' + e.expA + ' exp</b>. ';
+      foot += e.cleared ? TR('Lägret är borta. ') : TR('Kvar i lägret: ') + e.left + TR(' banditer. ');
+      if (e.survivors) foot += trupper(e.survivors) + TR(' stannar på rutan.');
+      return '<article class="rep ' + (e.cleared ? 'won' : 'lost') + '"><div class="rep-head"><span class="rep-kind">' + (e.cleared ? TR('Lägret rensat') : TR('Avvärjt')) + '</span>' + tclock + '</div>' + link +
+        '<div class="rep-grid">' + sideHTML(TR('Ditt anfall'), aU, raw.a, aBase, e.aLossU, false, e.aPow - raw.a) + sideHTML(TR('Banditlägret'), dU, raw.d, dBase, e.dLossU, true, e.dPow - raw.d) +
+        '</div><p>' + foot + '</p></article>';
+    }
     if (e.kind === 'battle') {
       const mineAtk = e.player === ME, mineDef = e.defender === ME;
       if (!mineAtk && !mineDef) return '';
@@ -9000,6 +9424,9 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if (e.kind === 'joined') return small(who(e.player) + TR(' gick med') + ((e.bonus || 1) > 1 ? TR(' och får +') + pct(e.bonus) + TR(' % guld') : '') + '.');
     if (e.kind === 'unlocked') return small(TR('Forskningscentret') + ': ' + UNITS[e.unit].name.toLowerCase() + TR(' är upplåst. Träna dem i barracken.'));
     if (e.kind === 'win' && e.week) return small((e.player === ME ? TR('Du') : who(e.player)) + TR(' hade flest vinstpoäng när veckan var slut och vann.'));
+    if (e.kind === 'camp') return small(TR('Ett banditläger med ') + e.n + ' ' + (e.n === 1 ? TR('bandit') : TR('banditer')) + TR(' har slagit läger i ') + name + TR('. Bara du ser det. Anfall det från rutan om du vill ha guldet och exp.'), 'alert');
+    if (e.kind === 'allyHeld') { const bt = S.tiles[e.back]; return small(trupper(e.n) + TR(' skulle anfalla ') + name + TR(', men ') + who(e.ally) + (!bt || bt.type === 'village' ? TR(' i ditt lag hade redan tagit rutan. De går hem till byn.') : TR(' i ditt lag hade redan tagit rutan. De går till ') + rname(bt) + '.')); }
+    if (e.kind === 'win' && e.team != null) { const ours = S.players[ME] && E.teamOf(S, ME) === e.team; return small((ours ? TR('Ert lag') : teamName(e.team)) + TR(' nådde ') + S.cfg.vpToWin + TR(' vinstpoäng och vann.'), ours ? 'won' : 'lost'); }
     if (e.kind === 'win') return small(e.player === ME ? TR('Du nådde ') + S.cfg.vpToWin + TR(' vinstpoäng och vann.') : who(e.player) + TR(' nådde ') + S.cfg.vpToWin + TR(' vinstpoäng och vann.'));
     return '';
   }
@@ -9240,7 +9667,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if (S.tut) { tutFinish(S.winner === ME, LX(pname(S.players[S.winner]) + ' nådde ' + S.cfg.vpToWin + ' vinstpoäng först. Ta fler rutor tidigt, försvara gränsen och håll kullen längre. Försök igen!', pname(S.players[S.winner]) + ' reached ' + S.cfg.vpToWin + ' victory points first. Take more territories early, defend the border and hold the Hill longer. Try again!')); return; }
     const p = me();
     const ms = S.endedAt || S.time;
-    const won = S.winner === ME;
+    const won = S.teams ? E.ally(S, S.winner, ME) : S.winner === ME;
     $('ov-win').classList.toggle('lost', !won);   // kronan bara vid seger
     setText($('winTitle'), won ? TR('Seger!') : TR('Förlust'));
     if (S.week) {
@@ -9248,6 +9675,12 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       setText($('winText'), (won ? TR('Du hade flest vinstpoäng när veckan var slut: ') : pname(S.players[S.winner]) + TR(' hade flest vinstpoäng när veckan var slut: ')) + fmt(E.vp(S.players[S.winner])) + '. ' +
         TR('Topp tre: ') + listNames(top.slice(0, 3).map(id => pname(S.players[id]) + ' (' + fmt(E.vp(S.players[id])) + ')')) + '.' +
         (won ? '' : TR(' Du kom på plats ') + (top.indexOf(ME) + 1) + TR(' med ') + fmt(E.vp(p)) + '.'));
+    } else if (S.teams) {
+      const wt = E.teamOf(S, S.winner), mt = E.teamOf(S, ME), ot = mt === 0 ? 1 : 0;
+      const names = t => listNames(teamIds(t).map(id => id === ME ? TR('du') : pname(S.players[id])));
+      setText($('winText'), won
+        ? TR('Ert lag (') + names(wt) + TR(') nådde ') + S.cfg.vpToWin + TR(' vinstpoäng efter ') + durWords(ms) + TR(' speltid. ') + teamName(ot) + TR(' hade ') + fmt(teamIds(ot).length ? E.teamVp(S, teamIds(ot)[0]) : 0) + '.'
+        : teamName(wt) + ' (' + names(wt) + TR(') nådde ') + S.cfg.vpToWin + TR(' vinstpoäng efter ') + durWords(ms) + TR(' speltid. Ert lag hade ') + fmt(E.teamVp(S, ME)) + '.');
     } else if (won) {
       const best = store.get(BEST_KEY);
       const record = !S.online && (!best || !best.ms || ms < best.ms);
@@ -9432,6 +9865,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       case 'on-leave': leaveOnline(); openOnline(); break;
       case 'on-resume': hostResume(); break;
       case 'on-vp': setLobbyVp(+b.dataset.d); break;
+      case 'on-team': lobbyTeam(+b.dataset.i); break;
       case 'ava': pickAva(+b.dataset.ava); break;
       case 'on-rejoin': rejoin(); break;
       case 'on-quit': leaveOnline(); showStart(); break;
@@ -9501,7 +9935,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       case 'fwd-send': {
         const f = ui.fwd;
         if (!f || f.to < 0) break;
-        const atkF = !mineT(S.tiles[f.to]) && S.tiles[f.to].type !== 'village';
+        const atkF = !standT(S.tiles[f.to]) && S.tiles[f.to].type !== 'village';
         if (dispatch({ type: 'send', from: f.from, to: f.to, units: E.U(f.u), stay: atkF && !!f.stay }).ok) {
           ui.fwd = null; ui.sheetSig = '';
           renderSheet();
@@ -9521,8 +9955,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       case 'snclear': ui.sendU = E.U(); updateSheet(); break;
       case 'send': {
         if (ui.sendFrom < 0) break;
-        const attackNow = !mineT(S.tiles[ui.sel]);
-        if (dispatch({ type: 'send', from: ui.sendFrom, to: ui.sel, units: E.U(ui.sendU), stay: attackNow && ui.stay }).ok) {
+        const camp = campSel(), attackNow = !standT(S.tiles[ui.sel]);
+        if (dispatch({ type: 'send', from: ui.sendFrom, to: ui.sel, units: E.U(ui.sendU), stay: attackNow && ui.stay, camp: camp || undefined }).ok) {
           if (!ui.stayKeep) ui.stay = false;   // kryssrutan nollställs efter anfallet, utom när "kom ihåg" är ikryssad
           const su = fromU();
           KEYS.forEach(k => { ui.sendU[k] = Math.min(ui.sendU[k], su[k] || 0); });
@@ -9584,7 +10018,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     supabaseKey: 'sb_publishable_eyoxyRNFN4f1KOsOhJjdBQ_LGNIQ3DZ',   // publik nyckel, får synas
     ice: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
   };
-  const PROTO = 17, MAXP = E.CONFIG.maxOnline || 8, CHUNK = 15000;
+  const PROTO = 19, MAXP = E.CONFIG.maxOnline || 8, CHUNK = 15000;
   const useLocal = () => !ONLINE_CFG.supabaseUrl || !ONLINE_CFG.supabaseKey || /[?&]lokal\b/.test(location.search);
   function rid(n) {
     const a = 'abcdefghjkmnpqrstuvwxyz23456789', r = crypto.getRandomValues(new Uint8Array(n));
@@ -9879,7 +10313,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       else if (l.n >= MAXP) btn = TR('<button class="btn" type="button" disabled>Full</button>');
       else btn = '<button class="btn primary" type="button" data-act="on-join" data-id="' + id + TR('">Gå med</button>');
       return '<div class="item">' + icon('t-village') +
-        '<div class="t"><b>' + esc(l.name) + '</b><small>' + esc(l.host) + ' · ' + l.n + TR(' av ') + MAXP + TR(' spelare · ') + spdTxt(l.speed) + ' · ' + (l.vp || 100) + TR(' vinstpoäng') + (l.started ? TR(' · pågår') : '') + '</small></div>' + btn + '</div>';
+        '<div class="t"><b>' + esc(l.name) + '</b><small>' + esc(l.host) + ' · ' + l.n + TR(' av ') + MAXP + TR(' spelare · ') + spdTxt(l.speed) + ' · ' + (l.vp || 100) + TR(' vinstpoäng') + (l.teams ? TR(' · två lag') : '') + (l.started ? TR(' · pågår') : '') + '</small></div>' + btn + '</div>';
     }).join('');
   }
   // Avatarväljaren: 12 porträtt. taken = avatarer som andra i lobbyn redan har.
@@ -9919,12 +10353,22 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if (!r || $('ov-online').hidden) return;
     setText($('onTitle'), r.name);
     setText($('onRoomInfo'), host ? TR('Lobbyn syns nu för andra under Spela online. Starta när alla är med, 2–8 spelare.') : TR('Du är med. Värden startar spelet när alla är med.'));
-    const cols = E.CONFIG.playerColors;
-    let html = r.players.map((p, i) =>
-      '<div class="stand with-ava"><span class="ava-dot" style="--pc:' + cols[i % cols.length][0] + '">' + avatarSVG(p.avatar || 0) + '</span>' +
+    const cols = E.CONFIG.playerColors, teams = !!r.teams;
+    const ci = teams ? E.teamColorIdx(r.players.map(p => p.team | 0)) : r.players.map((p, i) => i);
+    // Byt lag: varje spelare byter själv, och värden flyttar bottarna.
+    const sw = (p, i) => teams && (i === r.you || (host && p.bot)) ? '<button class="btn team-sw" type="button" data-act="on-team" data-i="' + i + '">' + TR('Till ') + esc(TR('Lag ') + ((p.team | 0) === 1 ? 1 : 2)) + '</button>' : '';
+    const row = (p, i) =>
+      '<div class="stand with-ava' + (teams ? ' tm' : '') + '"><span class="ava-dot" style="--pc:' + cols[ci[i] % cols.length][0] + '">' + avatarSVG(p.avatar || 0) + '</span>' +
         '<div class="who">' + esc(p.name) + (i === r.you ? TR(' (du)') : '') + '<small>' + esc(p.village) + (p.on ? '' : TR(' · ansluter …')) + '</small></div>' +
-        '<span class="stand-end"><span class="tag ' + (p.host ? 'mine' : 'neutral') + '">' + (p.host ? TR('Värd') : p.bot ? TR('Bot · ') + RIVAL_LEVELS[p.bot].toLowerCase() : TR('Gäst')) + '</span>' +
-        (host && p.bot ? '<button class="icon-btn sm" type="button" data-act="on-rmbot" data-i="' + i + TR('" aria-label="Ta bort ') + esc(p.name) + '">' + icon('i-close') + '</button>' : '') + '</span></div>').join('');
+        '<span class="stand-end">' + sw(p, i) + '<span class="tag ' + (p.host ? 'mine' : 'neutral') + '">' + (p.host ? TR('Värd') : p.bot ? TR('Bot · ') + RIVAL_LEVELS[p.bot].toLowerCase() : TR('Gäst')) + '</span>' +
+        (host && p.bot ? '<button class="icon-btn sm" type="button" data-act="on-rmbot" data-i="' + i + TR('" aria-label="Ta bort ') + esc(p.name) + '">' + icon('i-close') + '</button>' : '') + '</span></div>';
+    let html = '';
+    if (teams) {
+      for (const t of [0, 1]) {
+        const ids = r.players.map((p, i) => i).filter(i => (r.players[i].team | 0) === t);
+        html += '<div class="team-head"><b>' + esc(TR('Lag ') + (t + 1)) + '</b><span>' + ids.length + TR(' spelare') + '</span></div>' + ids.map(i => row(r.players[i], i)).join('');
+      }
+    } else html = r.players.map(row).join('');
     for (let i = r.players.length; i < MAXP; i++) html += TR('<div class="stand slot"><span class="dot"></span><div class="who">Ledig plats</div><span></span></div>');
     $('onPlayers').innerHTML = html;
     const mine = r.players[r.you];
@@ -9933,13 +10377,17 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     setText($('onVp'), String(vp));
     $('onVpMinus').hidden = $('onVpPlus').hidden = !host;
     $('onVpMinus').disabled = vp <= VP_MIN; $('onVpPlus').disabled = vp >= VP_MAX;
-    const n = r.players.length;
+    const n = r.players.length, chk = $('onTeams'), oneSide = teams && !teamsOk(r.players);
+    chk.checked = teams; chk.disabled = !host;
+    // Lagspel: målet gånger antalet spelare i det minsta laget.
+    const vp0 = r.vp || 100, mt = teams ? Math.max(1, Math.min(...[0, 1].map(t => r.players.filter(p => (p.team | 0) === t).length))) : 1;
+    setText($('onTeamsLbl'), TR('Två lag') + (teams ? ' · ' + vp0 + ' × ' + mt + ' = ' + vp0 * mt + TR(' vinstpoäng för laget') : ''));
     $('onBotRow').hidden = !host || n >= MAXP;
     $('onStartBtn').hidden = !host;
-    $('onStartBtn').disabled = n < 2;
-    setText($('onStartBtn'), n < 2 ? TR('Väntar på spelare') : TR('Starta spelet'));
+    $('onStartBtn').disabled = n < 2 || oneSide;
+    setText($('onStartBtn'), n < 2 ? TR('Väntar på spelare') : oneSide ? TR('Båda lagen behöver en spelare') : TR('Starta spelet'));
     setText($('onRoomHint'), host ? TR('Spelet börjar i 1×. Du kan ändra hastigheten under spelet. Bottarna körs i din webbläsare.') :
-      TR('Väntar på att ') + (r.players[0] ? r.players[0].name : TR('värden')) + TR(' startar spelet. Först till ') + (r.vp || 100) + TR(' vinstpoäng vinner.'));
+      TR('Väntar på att ') + (r.players[0] ? r.players[0].name : TR('värden')) + TR(' startar spelet. ') + (teams ? TR('Det första laget till ') : TR('Först till ')) + (r.vp || 100) * (teams ? Math.max(1, Math.min(...[0, 1].map(t => r.players.filter(p => (p.team | 0) === t).length))) : 1) + TR(' vinstpoäng vinner.'));
   }
 
   // ---------- Värd ----------
@@ -9947,22 +10395,48 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
   const VP_STEP = 25, VP_MIN = 25, VP_MAX = 500;
   function lobbyInfo() {
     const lob = NET.lobby;
-    return { id: lob.id, v: PROTO, name: lob.name, host: lob.players[0].name, n: lob.players.length, speed: lob.speed, vp: lob.vp || 100, started: !!lob.started, ts: Date.now() };
+    return { id: lob.id, v: PROTO, name: lob.name, host: lob.players[0].name, n: lob.players.length, speed: lob.speed, vp: lob.vp || 100, teams: !!lob.teams, started: !!lob.started, ts: Date.now() };
   }
   function roomData() {
     const lob = NET.lobby;
-    return { id: lob.id, name: lob.name, speed: lob.speed, vp: lob.vp || 100, started: lob.started,
-      players: lob.players.map(p => ({ name: p.name, village: p.village, host: !!p.host, bot: p.bot || null, on: !!p.on, avatar: p.avatar || 0 })) };
+    return { id: lob.id, name: lob.name, speed: lob.speed, vp: lob.vp || 100, started: lob.started, teams: !!lob.teams,
+      players: lob.players.map(p => ({ name: p.name, village: p.village, host: !!p.host, bot: p.bot || null, on: !!p.on, avatar: p.avatar || 0, team: p.team | 0 })) };
   }
   function lobbySave() {
     const lob = NET.lobby;
-    return { id: lob.id, name: lob.name, speed: lob.speed, vp: lob.vp || 100, started: true,
-      players: lob.players.map(p => ({ name: p.name, village: p.village, token: p.token, host: !!p.host, bot: p.bot || null, pid: p.pid, avatar: p.avatar || 0 })) };
+    return { id: lob.id, name: lob.name, speed: lob.speed, vp: lob.vp || 100, started: true, teams: !!lob.teams,
+      players: lob.players.map(p => ({ name: p.name, village: p.village, token: p.token, host: !!p.host, bot: p.bot || null, pid: p.pid, avatar: p.avatar || 0, team: p.team | 0 })) };
   }
   function setLobbyVp(d) {
     const lob = NET.lobby;
     if (!lob || NET.role !== 'host' || lob.started) return;
     lob.vp = clamp((lob.vp || 100) + d, VP_MIN, VP_MAX);
+    roomChanged();
+  }
+  // Två lag. Slås det på hamnar människorna i lag 1 och bottarna i lag 2 (finns inga bottar delas människorna upp).
+  const teamsOk = pl => [0, 1].every(t => pl.some(p => (p.team | 0) === t));
+  // Nya spelare: människor till laget med minst människor (lika: lag 1), bottar till laget med minst spelare (lika: lag 2).
+  function newTeam(lob, bot) {
+    const c = t => lob.players.filter(p => (p.team | 0) === t && (bot || !p.bot)).length;
+    return bot ? (c(0) < c(1) ? 0 : 1) : (c(1) < c(0) ? 1 : 0);
+  }
+  function setLobbyTeams(on) {
+    const lob = NET.lobby;
+    if (!lob || NET.role !== 'host' || lob.started) { if (NET.view === 'room') renderRoom(); return; }
+    lob.teams = !!on;
+    if (lob.teams) {
+      const bots = lob.players.some(p => p.bot);
+      let h = 0;
+      lob.players.forEach(p => { p.team = p.bot ? 1 : bots ? 0 : (h++ % 2); });
+    }
+    roomChanged();
+  }
+  function lobbyTeam(i) {
+    if (NET.view !== 'room') return;
+    if (NET.role === 'guest') { const r = NET.room; if (r && r.teams && i === r.you && NET.link) NET.link.send({ k: 'team', t: (r.players[i].team | 0) === 1 ? 0 : 1 }); return; }
+    const lob = NET.lobby, p = lob && lob.players[i];
+    if (!lob || NET.role !== 'host' || lob.started || !lob.teams || !p || !(i === 0 || p.bot)) return;
+    p.team = (p.team | 0) === 1 ? 0 : 1;
     roomChanged();
   }
   function roomChanged() {
@@ -10020,6 +10494,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
         if (lob.players.length >= MAXP) return deny(TR('Lobbyn är full.'));
         pl = { name: clean(m.name, 16) || TR('Gäst'), village: clean(m.village, 24) || TR('Nybygget'), token: clean(m.token, 32), on: true };
         pl.avatar = freeAvatar(lob, m.avatar | 0);
+        pl.team = lob.teams ? newTeam(lob, false) : 0;
         lob.players.push(pl);
       }
       if (pl.link && pl.link !== L) { const old = pl.link; pl.link = null; old.drop(); }
@@ -10048,6 +10523,11 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       if (lob && !lob.started && a >= 0 && a < AVAS.length && !lob.players.some(p => p !== pl && p.avatar === a)) { pl.avatar = a; roomChanged(); }
       return;
     }
+    if (m.k === 'team') {   // gästen byter lag i lobbyn
+      const lob = NET.lobby;
+      if (lob && !lob.started && lob.teams) { pl.team = (m.t | 0) === 1 ? 1 : 0; roomChanged(); }
+      return;
+    }
     if (m.k !== 'act' || !NET.lobby || !NET.lobby.started || !S || !pl.pid || !pl.link) return;
     // Spelaren tas alltid från anslutningen, aldrig från meddelandet.
     const r = S.winner ? { ok: false, error: TR('Spelet är slut.') } : E.apply(S, Object.assign({}, m.a, { player: pl.pid }));
@@ -10065,7 +10545,7 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     if (!lob || NET.role !== 'host' || lob.started || lob.players.length >= MAXP || !RIVAL_LEVELS[level]) return;
     const used = new Set(lob.players.map(p => p.village.toLowerCase()));
     const names = E.CONFIG.rivalVillageNames.filter(x => !used.has(x.toLowerCase()));
-    lob.players.push({ name: TR('Bot'), village: names[Math.floor(Math.random() * names.length)] || 'Botby', bot: level, on: true, token: 'bot-' + rid(8), avatar: freeAvatar(lob, -1) });
+    lob.players.push({ name: TR('Bot'), village: names[Math.floor(Math.random() * names.length)] || 'Botby', bot: level, on: true, token: 'bot-' + rid(8), avatar: freeAvatar(lob, -1), team: lob.teams ? newTeam(lob, true) : 0 });
     lob.players.filter(p => p.bot).forEach((p, k) => { p.name = TR('Bot ') + (k + 1); });
     roomChanged();
   }
@@ -10080,8 +10560,8 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
     const lob = NET.lobby;
     if (!lob || NET.role !== 'host' || lob.started) return;
     lob.players = lob.players.filter(p => p.host || p.bot || p.link);
-    if (lob.players.length < 2) { roomChanged(); return; }
-    const st = E.createGame({ vpToWin: lob.vp || 100, humans: lob.players.map(p => ({ name: p.name, villageName: p.village, bot: p.bot || null, avatar: p.avatar })) });
+    if (lob.players.length < 2 || (lob.teams && !teamsOk(lob.players))) { roomChanged(); return; }
+    const st = E.createGame({ vpToWin: lob.vp || 100, teams: !!lob.teams, humans: lob.players.map(p => ({ name: p.name, villageName: p.village, bot: p.bot || null, avatar: p.avatar, team: p.team | 0 })) });
     lob.players.forEach((p, i) => { p.pid = 'p' + (i + 1); });
     lob.started = true;
     ME = 'p1';
@@ -10778,7 +11258,9 @@ window.GP_EN_PAT = [["^Kräver forskningscenter nivå (\\d+)\\.$", "Requires res
       TR('<b>Byn</b> har ') + E.PLOTS + TR(' tomter. Tryck på en ledig tomt för att bygga något nytt, och på en byggnad för att bygga ut den eller använda den, till exempel verkstadens förbättringar.') + TR(' Muren byggs för sig på ringen runt byn och syns både i byn och på kartan.'),
       TR('<b>Två rivaler</b> spelar efter samma regler, dimman inräknad. De anfaller dig och varandra, slåss om kullen och går hellre på den som leder med mer än ') + c.leaderLead + TR(' vinstpoäng.'),
       TR('<b>Veckospel</b>: plats för ') + c.week.players + TR(' spelare, ') + (c.week.regionsPerSlot || c.regionsPerPlayer) + TR(' rutor per spelare, och spelet pågår i ') + c.week.days + TR(' dagar även när du inte är inne. Bara byplatser där någon spelar finns på kartan; resten är hav tills en ny spelare går med, utom de ') + (c.week.base || 0) + TR(' innersta rutorna i varje del (basen) som alltid finns runt kullen. Varannan plats fylls först, så kartan börjar som en stjärna. Den som går med efter första timmen är immun i ') + (c.week.immunityHours || 6) + TR(' timmar: ingen kan anfalla dem och de kan inte anfalla andra spelare. Byggen tar en stund (') + D(E.buildMs({ cfg: { build: c.week.build } }, 1)) + TR(' för nivå 1) och du kan köa ett bygge till. Den som har flest vinstpoäng när tiden är ute vinner. Den som går med senare får +') + Math.round(c.week.joinBonusPerDay * 100) + TR(' % guld för varje hel dag som gått. Topplistan visar också vinstpoäng per timme och dödade fiender i anfall och försvar (neutrala räknas inte).'),
-      TR('<b>Online</b>: 2–8 spelare, ungefär ') + c.regionsPerPlayer + TR(' rutor per spelare. En spelare skapar en lobby, väljer hur många vinstpoäng som krävs och kan fylla på med bottar; de andra går med under Spela online. Alla väljer en avatar. Spelet börjar i 1×. Värden kör spelet och kan ändra hastigheten under spelets gång, så det går bara medan värden har det öppet. Tappar du anslutningen kan du återansluta, och värden kan fortsätta ett sparat onlinespel senare.'),
+      TR('<b>Online</b>: 2–8 spelare, ungefär ') + c.regionsPerPlayer + TR(' rutor per spelare. En spelare skapar en lobby, väljer hur många vinstpoäng som krävs och kan fylla på med bottar; de andra går med under Spela online. Alla väljer en avatar. Spelet börjar i 1×. Värden kör spelet och kan ändra hastigheten under spelets gång, så det går bara medan värden har det öppet. Tappar du anslutningen kan du återansluta, och värden kan fortsätta ett sparat onlinespel senare.') +
+        TR(' Med <b>Två lag</b> väljer varje spelare lag, och värden placerar bottarna. Lagkamraterna börjar bredvid varandra, har färger ur samma familj, ser det de andra i laget ser och kan inte anfalla varandra. Du kan ställa trupper på en lagkamrats ruta (inte i byn) som på en egen, gå igenom lagkamraters rutor och anfalla allt som gränsar till dem. Lagets vinstpoäng räknas tillsammans, och målet är poängmålet gånger antalet spelare i det minsta laget.') +
+        (c.pace ? '' : TR(' <b>Banditläger</b> kan dyka upp på dina rutor från minut 7. Bara du ser dem, och de gör ingen skada, men banditerna ger guld och exp som neutrala när du dödar dem.')),
     ].map(x => '<li>' + x + '</li>').join('');
   }
   $('rulesMenu').innerHTML = rulesHTML();
